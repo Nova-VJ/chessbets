@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Wallet, ChevronDown, Copy, ExternalLink, RefreshCw } from 'lucide-react';
+import { Wallet, ChevronDown, Copy, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,9 +18,13 @@ const WalletButton = () => {
     address,
     balance,
     chainId,
+    isBSC,
     connect,
     disconnect,
     refreshBalance,
+    switchToBSC,
+    getNetworkName,
+    getCurrencySymbol,
     hasMetaMask,
   } = useWallet();
 
@@ -47,24 +51,19 @@ const WalletButton = () => {
     toast.info('Wallet desconectada');
   };
 
+  const handleSwitchToBSC = async () => {
+    const success = await switchToBSC(true); // Use testnet
+    if (success) {
+      toast.success('Cambiado a BSC Testnet');
+    } else {
+      toast.error('Error al cambiar de red');
+    }
+  };
+
   const copyAddress = () => {
     if (address) {
       navigator.clipboard.writeText(address);
       toast.success('Dirección copiada');
-    }
-  };
-
-  const getNetworkName = (id: number | null) => {
-    switch (id) {
-      case 1: return 'Ethereum';
-      case 5: return 'Goerli';
-      case 11155111: return 'Sepolia';
-      case 137: return 'Polygon';
-      case 80001: return 'Mumbai';
-      case 56: return 'BSC';
-      case 42161: return 'Arbitrum';
-      case 10: return 'Optimism';
-      default: return `Chain ${id}`;
     }
   };
 
@@ -76,6 +75,12 @@ const WalletButton = () => {
     if (!bal) return '0.00';
     const num = parseFloat(bal);
     return num.toFixed(4);
+  };
+
+  const getExplorerUrl = () => {
+    if (chainId === 56) return `https://bscscan.com/address/${address}`;
+    if (chainId === 97) return `https://testnet.bscscan.com/address/${address}`;
+    return `https://etherscan.io/address/${address}`;
   };
 
   if (!isConnected) {
@@ -98,12 +103,12 @@ const WalletButton = () => {
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            className="w-2 h-2 rounded-full bg-success"
+            className={`w-2 h-2 rounded-full ${isBSC ? 'bg-success' : 'bg-warning'}`}
           />
           <div className="flex flex-col items-start text-left">
             <span className="font-mono text-xs">{formatAddress(address!)}</span>
             <span className="text-[10px] text-muted-foreground">
-              {formatBalance(balance)} ETH
+              {formatBalance(balance)} {getCurrencySymbol(chainId)}
             </span>
           </div>
           <ChevronDown className="w-4 h-4" />
@@ -112,11 +117,24 @@ const WalletButton = () => {
       <DropdownMenuContent align="end" className="w-56">
         <div className="px-3 py-2 border-b border-border">
           <p className="text-xs text-muted-foreground mb-1">Balance</p>
-          <p className="font-mono font-semibold">{formatBalance(balance)} ETH</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {chainId && getNetworkName(chainId)}
+          <p className="font-mono font-semibold">
+            {formatBalance(balance)} {getCurrencySymbol(chainId)}
           </p>
+          <div className="flex items-center gap-1 mt-1">
+            <div className={`w-1.5 h-1.5 rounded-full ${isBSC ? 'bg-success' : 'bg-warning'}`} />
+            <p className="text-xs text-muted-foreground">
+              {getNetworkName(chainId)}
+            </p>
+          </div>
         </div>
+        
+        {!isBSC && (
+          <DropdownMenuItem onClick={handleSwitchToBSC} className="text-warning">
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Cambiar a BSC
+          </DropdownMenuItem>
+        )}
+        
         <DropdownMenuItem onClick={copyAddress}>
           <Copy className="w-4 h-4 mr-2" />
           Copiar dirección
@@ -125,13 +143,9 @@ const WalletButton = () => {
           <RefreshCw className="w-4 h-4 mr-2" />
           Actualizar balance
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() =>
-            window.open(`https://etherscan.io/address/${address}`, '_blank')
-          }
-        >
+        <DropdownMenuItem onClick={() => window.open(getExplorerUrl(), '_blank')}>
           <ExternalLink className="w-4 h-4 mr-2" />
-          Ver en Etherscan
+          Ver en Explorer
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleDisconnect} className="text-destructive">

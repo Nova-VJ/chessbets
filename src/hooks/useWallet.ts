@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BrowserProvider, formatEther } from 'ethers';
+import { BSC_MAINNET, BSC_TESTNET } from '@/lib/contract';
 
 interface WalletState {
   isConnected: boolean;
@@ -8,6 +9,7 @@ interface WalletState {
   balance: string | null;
   chainId: number | null;
   error: string | null;
+  isBSC: boolean;
 }
 
 export const useWallet = () => {
@@ -18,6 +20,7 @@ export const useWallet = () => {
     balance: null,
     chainId: null,
     error: null,
+    isBSC: false,
   });
 
   const getProvider = useCallback(() => {
@@ -25,6 +28,10 @@ export const useWallet = () => {
       return new BrowserProvider(window.ethereum);
     }
     return null;
+  }, []);
+
+  const isBSCNetwork = useCallback((chainId: number | null): boolean => {
+    return chainId === 56 || chainId === 97; // BSC Mainnet or Testnet
   }, []);
 
   const fetchBalance = useCallback(async (address: string) => {
@@ -39,6 +46,35 @@ export const useWallet = () => {
       return null;
     }
   }, [getProvider]);
+
+  const switchToBSC = useCallback(async (testnet = true): Promise<boolean> => {
+    if (!window.ethereum) return false;
+
+    const network = testnet ? BSC_TESTNET : BSC_MAINNET;
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: network.chainId }],
+      });
+      return true;
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [network],
+          });
+          return true;
+        } catch (addError) {
+          console.error('Error adding BSC network:', addError);
+          return false;
+        }
+      }
+      console.error('Error switching network:', switchError);
+      return false;
+    }
+  }, []);
 
   const connect = useCallback(async () => {
     if (!window.ethereum) {
@@ -55,6 +91,7 @@ export const useWallet = () => {
       const accounts = await provider.send('eth_requestAccounts', []);
       const address = accounts[0];
       const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
       const balance = await fetchBalance(address);
 
       setState({
@@ -62,8 +99,9 @@ export const useWallet = () => {
         isConnecting: false,
         address,
         balance,
-        chainId: Number(network.chainId),
+        chainId,
         error: null,
+        isBSC: isBSCNetwork(chainId),
       });
 
       return true;
@@ -76,7 +114,7 @@ export const useWallet = () => {
       }));
       return false;
     }
-  }, [getProvider, fetchBalance]);
+  }, [getProvider, fetchBalance, isBSCNetwork]);
 
   const disconnect = useCallback(() => {
     setState({
@@ -86,6 +124,7 @@ export const useWallet = () => {
       balance: null,
       chainId: null,
       error: null,
+      isBSC: false,
     });
   }, []);
 
@@ -115,7 +154,11 @@ export const useWallet = () => {
 
     const handleChainChanged = (chainIdHex: string) => {
       const chainId = parseInt(chainIdHex, 16);
-      setState(prev => ({ ...prev, chainId }));
+      setState(prev => ({ 
+        ...prev, 
+        chainId,
+        isBSC: isBSCNetwork(chainId),
+      }));
       refreshBalance();
     };
 
@@ -126,7 +169,7 @@ export const useWallet = () => {
       window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
       window.ethereum?.removeListener('chainChanged', handleChainChanged);
     };
-  }, [state.address, disconnect, fetchBalance, refreshBalance]);
+  }, [state.address, disconnect, fetchBalance, refreshBalance, isBSCNetwork]);
 
   // Check if already connected on mount
   useEffect(() => {
@@ -141,6 +184,7 @@ export const useWallet = () => {
         if (accounts.length > 0) {
           const address = accounts[0];
           const network = await provider.getNetwork();
+          const chainId = Number(network.chainId);
           const balance = await fetchBalance(address);
 
           setState({
@@ -148,8 +192,9 @@ export const useWallet = () => {
             isConnecting: false,
             address,
             balance,
-            chainId: Number(network.chainId),
+            chainId,
             error: null,
+            isBSC: isBSCNetwork(chainId),
           });
         }
       } catch (err) {
@@ -158,13 +203,39 @@ export const useWallet = () => {
     };
 
     checkConnection();
-  }, [getProvider, fetchBalance]);
+  }, [getProvider, fetchBalance, isBSCNetwork]);
+
+  const getNetworkName = useCallback((id: number | null): string => {
+    switch (id) {
+      case 1: return 'Ethereum';
+      case 56: return 'BSC';
+      case 97: return 'BSC Testnet';
+      case 137: return 'Polygon';
+      case 42161: return 'Arbitrum';
+      default: return `Chain ${id}`;
+    }
+  }, []);
+
+  const getCurrencySymbol = useCallback((id: number | null): string => {
+    switch (id) {
+      case 56:
+      case 97:
+        return 'BNB';
+      case 137:
+        return 'MATIC';
+      default:
+        return 'ETH';
+    }
+  }, []);
 
   return {
     ...state,
     connect,
     disconnect,
     refreshBalance,
+    switchToBSC,
+    getNetworkName,
+    getCurrencySymbol,
     hasMetaMask: typeof window !== 'undefined' && !!window.ethereum,
   };
 };
