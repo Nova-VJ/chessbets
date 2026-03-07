@@ -122,7 +122,7 @@ const Lobby = () => {
       if (error) throw error;
 
       // Deduct stake from opponent balance
-      const currency = game.currency || 'BNB';
+      const currency = (game as any).currency || 'BNB';
       const balanceField = currency === 'USDT' ? 'balance_usdt' : 'balance';
       
       const { data: profile } = await supabase
