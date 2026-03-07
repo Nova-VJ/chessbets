@@ -23,6 +23,7 @@ import { useWallet } from '@/hooks/useWallet';
 import { useContract } from '@/hooks/useContract';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { CurrencyType } from '@/lib/tokens';
 
 interface CreateGameModalProps {
   open: boolean;
@@ -36,15 +37,16 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
   const [stake, setStake] = useState('0.01');
   const [timeControl, setTimeControl] = useState('10+0');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('balance');
+  const [currency, setCurrency] = useState<CurrencyType>('BNB');
   const [isCreating, setIsCreating] = useState(false);
   
-  const { isConnected: isWalletConnected, isBSC, switchToBSC, chainId, getCurrencySymbol } = useWallet();
+  const { isConnected: isWalletConnected, isBSC, switchToBSC, chainId } = useWallet();
   const { createGame, isLoading, isContractDeployed } = useContract();
   const { isAuthenticated, profile, user, refreshProfile } = useAuth();
 
   const isConnected = isWalletConnected || isAuthenticated;
-  const currency = getCurrencySymbol(chainId);
-  const hasEnoughBalance = profile && parseFloat(stake) <= profile.balance;
+  const currentBalance = currency === 'USDT' ? (profile?.balance_usdt || 0) : (profile?.balance || 0);
+  const hasEnoughBalance = parseFloat(stake) <= currentBalance;
 
   const handleSwitchNetwork = async () => {
     const success = await switchToBSC(true);
@@ -74,20 +76,18 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
 
     try {
       if (paymentMethod === 'balance') {
-        // Pay from internal balance
         if (!user || !profile) {
           toast.error('Debes iniciar sesión');
           return;
         }
 
-        if (stakeAmount > profile.balance) {
+        if (stakeAmount > currentBalance) {
           toast.error('Balance insuficiente', {
             description: 'Recarga tu wallet desde tu perfil',
           });
           return;
         }
 
-        // Create game in database
         const { data: game, error: gameError } = await supabase
           .from('games')
           .insert({
@@ -97,39 +97,40 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
             status: 'waiting',
             is_smart_contract: false,
             creator_paid: true,
+            currency: currency,
           })
           .select()
           .single();
 
         if (gameError) throw gameError;
 
-        // Deduct from balance
-        const newBalance = profile.balance - stakeAmount;
+        // Deduct from correct balance
+        const balanceField = currency === 'USDT' ? 'balance_usdt' : 'balance';
+        const newBalance = currentBalance - stakeAmount;
         const { error: balanceError } = await supabase
           .from('profiles')
-          .update({ balance: newBalance })
+          .update({ [balanceField]: newBalance })
           .eq('id', user.id);
 
         if (balanceError) throw balanceError;
 
-        // Record transaction
         await supabase.from('transactions').insert({
           user_id: user.id,
           type: 'game_stake',
           amount: stakeAmount,
           status: 'confirmed',
+          currency: currency,
         });
 
         await refreshProfile();
         
-        onCreateGame?.(stakeAmount, 'BNB', timeControl, game.id);
+        onCreateGame?.(stakeAmount, currency, timeControl, game.id);
         toast.success('¡Partida creada!', {
           description: 'Esperando oponente...',
         });
         onOpenChange(false);
 
       } else {
-        // Pay with wallet (smart contract on BSC)
         if (!isWalletConnected) {
           toast.error('Conecta tu wallet MetaMask');
           return;
@@ -144,10 +145,8 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
         }
 
         if (isContractDeployed) {
-          // Use smart contract for on-chain betting
-          const result = await createGame(stake);
+          const result = await createGame(stake, currency);
           if (result) {
-            // Also track in database
             if (user) {
               await supabase.from('games').insert({
                 creator_id: user.id,
@@ -157,16 +156,16 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
                 is_smart_contract: true,
                 contract_game_id: result.gameId,
                 creator_paid: true,
+                currency: currency,
               });
             }
             
-            onCreateGame?.(stakeAmount, 'BNB', timeControl, result.gameId);
+            onCreateGame?.(stakeAmount, currency, timeControl, result.gameId);
             onOpenChange(false);
           }
         } else {
-          // Contract not deployed - notify user
           toast.error('Smart contract en desarrollo', {
-            description: 'Usa "Balance App" por ahora o espera al despliegue del contrato',
+            description: 'Usa "Balance App" por ahora',
           });
         }
       }
@@ -198,7 +197,36 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4 py-4"
         >
-          {/* Payment Method Selection */}
+          {/* Currency Selection */}
+          <div className="space-y-2">
+            <Label>Moneda</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={currency === 'BNB' ? 'default' : 'outline'}
+                className="h-auto py-3 flex flex-col items-center gap-1"
+                onClick={() => setCurrency('BNB')}
+              >
+                <span className="text-lg font-bold">BNB</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Nativo BSC
+                </span>
+              </Button>
+              <Button
+                type="button"
+                variant={currency === 'USDT' ? 'default' : 'outline'}
+                className="h-auto py-3 flex flex-col items-center gap-1"
+                onClick={() => setCurrency('USDT')}
+              >
+                <span className="text-lg font-bold">USDT</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Tether BEP-20
+                </span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Payment Method */}
           <div className="space-y-2">
             <Label>Método de pago</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -211,7 +239,7 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
                 <CreditCard className="w-5 h-5" />
                 <span className="text-xs">Balance App</span>
                 <span className="text-[10px] text-muted-foreground">
-                  {profile?.balance?.toFixed(4) || '0.00'} BNB
+                  {currentBalance.toFixed(4)} {currency}
                 </span>
               </Button>
               <Button
@@ -230,7 +258,7 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
             </div>
           </div>
 
-          {/* Network Warning for wallet payment */}
+          {/* Network Warning */}
           {paymentMethod === 'wallet' && isWalletConnected && !isBSC && (
             <div className="flex items-start gap-3 p-3 rounded-lg bg-warning/10 border border-warning/30">
               <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
@@ -253,13 +281,13 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
               <div className="flex-1">
                 <p className="text-sm font-medium text-destructive">Balance insuficiente</p>
                 <p className="text-xs text-muted-foreground">
-                  Tienes {profile?.balance?.toFixed(4) || '0'} BNB. Recarga desde tu perfil.
+                  Tienes {currentBalance.toFixed(4)} {currency}. Recarga desde tu perfil.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Contract Status for wallet */}
+          {/* Contract Status */}
           {paymentMethod === 'wallet' && isWalletConnected && isBSC && (
             <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
               isContractDeployed 
@@ -288,12 +316,12 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
                 value={stake}
                 onChange={(e) => setStake(e.target.value)}
                 placeholder="0.01"
-                step="0.001"
+                step={currency === 'USDT' ? '1' : '0.001'}
                 min="0"
                 className="flex-1 bg-secondary border-border"
               />
               <div className="flex items-center justify-center px-4 bg-secondary border border-border rounded-md text-sm font-medium">
-                BNB
+                {currency}
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -328,13 +356,13 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
             <div className="flex justify-between text-sm">
               <span>Tu apuesta:</span>
               <span className="font-semibold text-primary">
-                {stake} BNB
+                {stake} {currency}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Posible ganancia:</span>
               <span className="font-semibold text-success">
-                {(parseFloat(stake || '0') * 1.95).toFixed(4)} BNB
+                {(parseFloat(stake || '0') * 1.95).toFixed(4)} {currency}
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -356,7 +384,7 @@ const CreateGameModal = ({ open, onOpenChange, onCreateGame }: CreateGameModalPr
               (paymentMethod === 'wallet' && (!isWalletConnected || !isBSC || !isContractDeployed))
             }
           >
-            {isLoading || isCreating ? 'Procesando...' : 'Crear Partida'}
+            {isLoading || isCreating ? 'Procesando...' : `Crear Partida (${currency})`}
           </Button>
 
           {paymentMethod === 'wallet' && isBSC && isContractDeployed && (

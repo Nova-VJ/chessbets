@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, RefreshCw, Filter, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import GameCard from '@/components/GameCard';
 import CreateGameModal from '@/components/CreateGameModal';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Game {
   id: string;
@@ -21,24 +23,141 @@ interface Game {
 
 const Lobby = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [games, setGames] = useState<Game[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [games] = useState<Game[]>([
-    { id: '1', creator: '0x1234...5678', stake: 0.05, currency: 'ETH', timeControl: '10+0', status: 'waiting' },
-    { id: '2', creator: '0xabcd...ef01', stake: 100, currency: 'USDC', timeControl: '5+0', status: 'waiting' },
-    { id: '3', creator: '0x9876...5432', stake: 0.1, currency: 'ETH', timeControl: '3+0', status: 'playing' },
-    { id: '4', creator: '0xfedc...ba98', stake: 50, currency: 'USDT', timeControl: '15+10', status: 'waiting' },
-    { id: '5', creator: '0x2468...1357', stake: 0.02, currency: 'ETH', timeControl: '1+0', status: 'finished' },
-  ]);
-
-  const handleCreateGame = (stake: number, currency: string, timeControl: string) => {
-    console.log('Creating game:', { stake, currency, timeControl });
+  const formatTimeControl = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const inc = seconds % 60;
+    return inc > 0 ? `${mins}+${inc}` : `${mins}+0`;
   };
 
-  const handleJoinGame = (gameId: string) => {
-    toast.success('Uniéndote a la partida...');
-    navigate('/play');
+  const loadGames = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*, profiles!games_creator_id_fkey(display_name, wallet_address)')
+        .in('status', ['waiting', 'playing'])
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const mappedGames: Game[] = (data || []).map((g: any) => ({
+        id: g.id,
+        creator: g.profiles?.display_name || g.profiles?.wallet_address?.slice(0, 6) + '...' + g.profiles?.wallet_address?.slice(-4) || 'Anónimo',
+        stake: g.stake_amount,
+        currency: g.currency || 'BNB',
+        timeControl: formatTimeControl(g.time_control),
+        status: g.status === 'waiting' ? 'waiting' : g.status === 'playing' ? 'playing' : 'finished',
+      }));
+
+      setGames(mappedGames);
+    } catch (error) {
+      console.error('Error loading games:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGames();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('lobby-games')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'games' },
+        () => {
+          loadGames();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const handleCreateGame = (stake: number, currency: string, timeControl: string) => {
+    loadGames();
+  };
+
+  const handleJoinGame = async (gameId: string) => {
+    if (!user) {
+      toast.error('Debes iniciar sesión para unirte');
+      return;
+    }
+
+    try {
+      const { data: game, error: fetchError } = await supabase
+        .from('games')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      if (game.creator_id === user.id) {
+        toast.error('No puedes unirte a tu propia partida');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('games')
+        .update({ 
+          opponent_id: user.id, 
+          status: 'playing',
+          started_at: new Date().toISOString(),
+          opponent_paid: true
+        })
+        .eq('id', gameId)
+        .eq('status', 'waiting');
+
+      if (error) throw error;
+
+      // Deduct stake from opponent balance
+      const currency = game.currency || 'BNB';
+      const balanceField = currency === 'USDT' ? 'balance_usdt' : 'balance';
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select(balanceField)
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        const currentBal = (profile as any)[balanceField] || 0;
+        if (currentBal < game.stake_amount) {
+          toast.error(`Balance insuficiente de ${currency}`);
+          return;
+        }
+
+        await supabase
+          .from('profiles')
+          .update({ [balanceField]: currentBal - game.stake_amount })
+          .eq('id', user.id);
+
+        await supabase.from('transactions').insert({
+          user_id: user.id,
+          type: 'game_stake',
+          amount: game.stake_amount,
+          status: 'confirmed',
+          currency: currency,
+        });
+      }
+
+      toast.success('¡Te has unido a la partida!');
+      navigate('/play');
+    } catch (error: any) {
+      console.error('Error joining game:', error);
+      toast.error('Error al unirse a la partida');
+    }
   };
 
   const filteredGames = games.filter(
@@ -64,7 +183,7 @@ const Lobby = () => {
             Lobby de <span className="gradient-text">Partidas</span>
           </h1>
           <p className="text-xs text-muted-foreground">
-            Encuentra una partida o crea la tuya
+            Encuentra una partida o crea la tuya • BNB & USDT
           </p>
         </motion.div>
 
@@ -87,7 +206,7 @@ const Lobby = () => {
           <Button variant="outline" size="icon" className="h-9 w-9">
             <Filter className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="icon" className="h-9 w-9">
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={loadGames}>
             <RefreshCw className="w-4 h-4" />
           </Button>
         </motion.div>
@@ -135,16 +254,18 @@ const Lobby = () => {
           ) : (
             <div className="glass-card p-6 text-center">
               <p className="text-sm text-muted-foreground mb-3">
-                No hay partidas disponibles
+                {isLoading ? 'Cargando partidas...' : 'No hay partidas disponibles'}
               </p>
-              <Button
-                onClick={() => setIsCreateModalOpen(true)}
-                size="sm"
-                className="bg-primary"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Crear partida
-              </Button>
+              {!isLoading && (
+                <Button
+                  onClick={() => setIsCreateModalOpen(true)}
+                  size="sm"
+                  className="bg-primary"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Crear partida
+                </Button>
+              )}
             </div>
           )}
         </motion.section>

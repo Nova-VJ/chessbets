@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, Trophy, Coins, TrendingUp, History, Settings, LogOut, Wallet, ArrowDown, ArrowUp, Loader2 } from 'lucide-react';
+import { User, Trophy, Coins, TrendingUp, History, Settings, LogOut, Wallet, ArrowDown, ArrowUp, Loader2, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppHeader from '@/components/AppHeader';
 import BottomNav from '@/components/BottomNav';
@@ -17,6 +17,7 @@ interface Transaction {
   amount: number;
   status: string;
   created_at: string;
+  currency?: string;
 }
 
 const Profile = () => {
@@ -67,13 +68,6 @@ const Profile = () => {
     }
   };
 
-  const stats = [
-    { label: 'Partidas', value: profile?.games_played?.toString() || '0', icon: History },
-    { label: 'Victorias', value: profile?.games_won?.toString() || '0', icon: Trophy },
-    { label: 'Balance', value: `${profile?.balance?.toFixed(2) || '0.00'} BNB`, icon: Coins },
-    { label: 'Rating', value: profile?.rating?.toString() || '1200', icon: TrendingUp },
-  ];
-
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -96,6 +90,8 @@ const Profile = () => {
       default: return type;
     }
   };
+
+  const hasAnyBalance = (profile?.balance || 0) > 0 || (profile?.balance_usdt || 0) > 0;
 
   if (!isConnected) {
     return (
@@ -146,9 +142,23 @@ const Profile = () => {
                   {profile.wallet_address.slice(0, 6)}...{profile.wallet_address.slice(-4)}
                 </p>
               )}
-              <p className="text-2xl font-bold text-primary mt-1">
-                {profile?.balance?.toFixed(4) || '0.0000'} BNB
-              </p>
+              {/* Dual balances */}
+              <div className="flex gap-4 mt-2">
+                <div className="flex items-center gap-1">
+                  <Coins className="w-4 h-4 text-primary" />
+                  <span className="text-lg font-bold text-primary">
+                    {profile?.balance?.toFixed(4) || '0.0000'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">BNB</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <DollarSign className="w-4 h-4 text-success" />
+                  <span className="text-lg font-bold text-success">
+                    {(profile?.balance_usdt || 0).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">USDT</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -165,7 +175,7 @@ const Profile = () => {
               variant="outline" 
               className="flex-1"
               onClick={() => setShowWithdrawModal(true)}
-              disabled={!profile?.balance || profile.balance <= 0}
+              disabled={!hasAnyBalance}
             >
               <ArrowUp className="w-4 h-4 mr-2" />
               Retirar
@@ -180,7 +190,12 @@ const Profile = () => {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-2 gap-3 mb-4"
         >
-          {stats.map((stat) => (
+          {[
+            { label: 'Partidas', value: profile?.games_played?.toString() || '0', icon: History },
+            { label: 'Victorias', value: profile?.games_won?.toString() || '0', icon: Trophy },
+            { label: 'Rating', value: profile?.rating?.toString() || '1200', icon: TrendingUp },
+            { label: 'Depositado', value: `${(profile?.total_deposited || 0).toFixed(2)}`, icon: Coins },
+          ].map((stat) => (
             <div key={stat.label} className="glass-card p-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
                 <stat.icon className="w-5 h-5 text-primary" />
@@ -237,7 +252,7 @@ const Profile = () => {
                         : 'text-destructive'
                     }`}>
                       {tx.type === 'deposit' || tx.type === 'game_win' || tx.type === 'game_refund' ? '+' : '-'}
-                      {tx.amount} BNB
+                      {tx.amount} {tx.currency || 'BNB'}
                     </p>
                     <p className={`text-[10px] ${
                       tx.status === 'confirmed' ? 'text-success' : 
@@ -253,7 +268,7 @@ const Profile = () => {
           </div>
         </motion.div>
 
-        {/* Link Wallet (if email user without wallet) */}
+        {/* Link Wallet */}
         {isAuthenticated && !profile?.wallet_address && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
