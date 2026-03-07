@@ -18,7 +18,7 @@ export const useContract = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isContractDeployed = CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000';
+  const isContractDeployed = (CONTRACT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000';
 
   const ensureBSCNetwork = useCallback(async (): Promise<boolean> => {
     const success = await switchToBSC(true);

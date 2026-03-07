@@ -43,7 +43,7 @@ export const BSC_TESTNET = {
 };
 
 // TODO: Replace with your deployed contract address
-export const CONTRACT_ADDRESS = '0x0000000000000000000000000000000000000000';
+export const CONTRACT_ADDRESS = '0x7fEfDf9C86e0E27991f44086942E82CEDbdF8610';
 
 export enum GameState {
   Waiting = 0,
