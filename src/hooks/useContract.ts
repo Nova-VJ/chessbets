@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { CurrencyType } from '@/lib/tokens';
 import {
   createGameOnChain,
   joinGameOnChain,
@@ -20,7 +21,7 @@ export const useContract = () => {
   const isContractDeployed = CONTRACT_ADDRESS !== '0x0000000000000000000000000000000000000000';
 
   const ensureBSCNetwork = useCallback(async (): Promise<boolean> => {
-    const success = await switchToBSC(true); // Use testnet by default
+    const success = await switchToBSC(true);
     if (!success) {
       toast.error('Por favor, cambia a la red BSC');
       return false;
@@ -28,7 +29,7 @@ export const useContract = () => {
     return true;
   }, []);
 
-  const createGame = useCallback(async (stakeInBNB: string) => {
+  const createGame = useCallback(async (stakeInAmount: string, currency: CurrencyType = 'BNB') => {
     if (!isContractDeployed) {
       toast.error('El contrato no está desplegado todavía');
       return null;
@@ -41,9 +42,9 @@ export const useContract = () => {
       const networkOk = await ensureBSCNetwork();
       if (!networkOk) return null;
 
-      toast.loading('Creando partida en blockchain...', { id: 'create-game' });
+      toast.loading(`Creando partida con ${currency}...`, { id: 'create-game' });
       
-      const result = await createGameOnChain(stakeInBNB);
+      const result = await createGameOnChain(stakeInAmount, currency);
       
       if (result) {
         toast.success('¡Partida creada en blockchain!', { id: 'create-game' });
@@ -61,7 +62,7 @@ export const useContract = () => {
     }
   }, [ensureBSCNetwork, isContractDeployed]);
 
-  const joinGame = useCallback(async (gameId: string, stakeInBNB: string) => {
+  const joinGame = useCallback(async (gameId: string, stakeInAmount: string, currency: CurrencyType = 'BNB') => {
     if (!isContractDeployed) {
       toast.error('El contrato no está desplegado todavía');
       return null;
@@ -76,7 +77,7 @@ export const useContract = () => {
 
       toast.loading('Uniéndote a la partida...', { id: 'join-game' });
       
-      const txHash = await joinGameOnChain(gameId, stakeInBNB);
+      const txHash = await joinGameOnChain(gameId, stakeInAmount, currency);
       
       if (txHash) {
         toast.success('¡Te has unido a la partida!', { id: 'join-game' });
@@ -105,7 +106,6 @@ export const useContract = () => {
 
     try {
       toast.loading('Cancelando partida...', { id: 'cancel-game' });
-      
       const txHash = await cancelGameOnChain(gameId);
       
       if (txHash) {
@@ -129,12 +129,12 @@ export const useContract = () => {
     return getGameFromChain(gameId);
   }, [isContractDeployed]);
 
-  const getBalance = useCallback(async (address: string): Promise<string> => {
+  const getBalance = useCallback(async (address: string, currency: CurrencyType = 'BNB'): Promise<string> => {
     if (!isContractDeployed) return '0';
-    return getPlayerBalance(address);
+    return getPlayerBalance(address, currency);
   }, [isContractDeployed]);
 
-  const withdraw = useCallback(async () => {
+  const withdraw = useCallback(async (currency: CurrencyType = 'BNB') => {
     if (!isContractDeployed) {
       toast.error('El contrato no está desplegado todavía');
       return null;
@@ -144,9 +144,8 @@ export const useContract = () => {
     setError(null);
 
     try {
-      toast.loading('Retirando fondos...', { id: 'withdraw' });
-      
-      const txHash = await withdrawBalance();
+      toast.loading(`Retirando ${currency}...`, { id: 'withdraw' });
+      const txHash = await withdrawBalance(currency);
       
       if (txHash) {
         toast.success('¡Fondos retirados!', { id: 'withdraw' });
@@ -164,7 +163,7 @@ export const useContract = () => {
     }
   }, [isContractDeployed]);
 
-  const deposit = useCallback(async (amountInBNB: string) => {
+  const deposit = useCallback(async (amount: string, currency: CurrencyType = 'BNB') => {
     if (!isContractDeployed) {
       toast.error('El contrato no está desplegado todavía');
       return null;
@@ -177,9 +176,8 @@ export const useContract = () => {
       const networkOk = await ensureBSCNetwork();
       if (!networkOk) return null;
 
-      toast.loading('Depositando fondos...', { id: 'deposit' });
-      
-      const txHash = await depositToPlatform(amountInBNB);
+      toast.loading(`Depositando ${currency}...`, { id: 'deposit' });
+      const txHash = await depositToPlatform(amount, currency);
       
       if (txHash) {
         toast.success('¡Fondos depositados!', { id: 'deposit' });

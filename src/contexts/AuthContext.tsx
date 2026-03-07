@@ -8,6 +8,7 @@ interface Profile {
   email: string | null;
   display_name: string | null;
   balance: number;
+  balance_usdt: number;
   total_deposited: number;
   total_withdrawn: number;
   wallet_address: string | null;
@@ -29,7 +30,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  updateBalance: (newBalance: number) => void;
+  updateBalance: (newBalance: number, currency?: 'BNB' | 'USDT') => void;
   linkWallet: (address: string, walletType: string) => Promise<void>;
 }
 
@@ -70,9 +71,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateBalance = (newBalance: number) => {
+  const updateBalance = (newBalance: number, currency: 'BNB' | 'USDT' = 'BNB') => {
     if (profile) {
-      setProfile({ ...profile, balance: newBalance });
+      if (currency === 'USDT') {
+        setProfile({ ...profile, balance_usdt: newBalance });
+      } else {
+        setProfile({ ...profile, balance: newBalance });
+      }
     }
   };
 
@@ -118,7 +123,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  // Auto-link wallet when user connects one
   useEffect(() => {
     if (user && address && profile && !profile.wallet_address) {
       linkWallet(address, 'metamask');

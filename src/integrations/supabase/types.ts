@@ -87,6 +87,60 @@ export type Database = {
           },
         ]
       }
+      matchmaking_queue: {
+        Row: {
+          currency: string
+          game_id: string | null
+          id: string
+          joined_at: string
+          matched_at: string | null
+          rating: number
+          stake_amount: number
+          status: string
+          time_control: number
+          user_id: string
+        }
+        Insert: {
+          currency?: string
+          game_id?: string | null
+          id?: string
+          joined_at?: string
+          matched_at?: string | null
+          rating?: number
+          stake_amount: number
+          status?: string
+          time_control?: number
+          user_id: string
+        }
+        Update: {
+          currency?: string
+          game_id?: string | null
+          id?: string
+          joined_at?: string
+          matched_at?: string | null
+          rating?: number
+          stake_amount?: number
+          status?: string
+          time_control?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matchmaking_queue_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matchmaking_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           balance: number

@@ -7,22 +7,21 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import AppHeader from '@/components/AppHeader';
 import BottomNav from '@/components/BottomNav';
-
-interface MatchmakingPlayer {
-  id: string;
-  address: string;
-  stake: number;
-  rating: number;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { CurrencyType } from '@/lib/tokens';
 
 const Matchmaking = () => {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState(0);
   const [stakeAmount, setStakeAmount] = useState([0.05]);
   const [timeControl, setTimeControl] = useState('5+0');
+  const [currency, setCurrency] = useState<CurrencyType>('BNB');
   const [playersInQueue, setPlayersInQueue] = useState(0);
-  const [foundMatch, setFoundMatch] = useState<MatchmakingPlayer | null>(null);
+  const [foundMatch, setFoundMatch] = useState<any>(null);
+  const [queueEntryId, setQueueEntryId] = useState<string | null>(null);
 
   const timeControls = [
     { value: '1+0', label: 'Bullet', description: '1 min' },
@@ -32,51 +31,196 @@ const Matchmaking = () => {
     { value: '15+10', label: 'Rápido', description: '15+10' },
   ];
 
-  const stakeRanges = [
-    { min: 0.01, max: 0.05, label: 'Micro' },
-    { min: 0.05, max: 0.2, label: 'Pequeño' },
-    { min: 0.2, max: 0.5, label: 'Medio' },
-    { min: 0.5, max: 1, label: 'Alto' },
-    { min: 1, max: 5, label: 'Premium' },
-  ];
+  const getTimeControlSeconds = (tc: string): number => {
+    const parts = tc.split('+');
+    return parseInt(parts[0]) * 60 + (parseInt(parts[1]) || 0);
+  };
 
+  // Listen for matches in realtime
+  useEffect(() => {
+    if (!isSearching || !queueEntryId) return;
+
+    const channel = supabase
+      .channel('matchmaking')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'matchmaking_queue',
+          filter: `id=eq.${queueEntryId}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.status === 'matched' && updated.game_id) {
+            setFoundMatch({
+              gameId: updated.game_id,
+              stake: stakeAmount[0],
+              currency,
+            });
+            setIsSearching(false);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isSearching, queueEntryId]);
+
+  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
     if (isSearching) {
       interval = setInterval(() => {
         setSearchTime(prev => prev + 1);
-        
-        // Simulate players in queue
-        setPlayersInQueue(Math.floor(Math.random() * 50) + 10);
-        
-        // Simulate finding a match after 3-8 seconds
-        if (Math.random() > 0.85 && searchTime > 2) {
-          const mockPlayer: MatchmakingPlayer = {
-            id: Math.random().toString(36).substr(2, 9),
-            address: `0x${Math.random().toString(16).slice(2, 6)}...${Math.random().toString(16).slice(2, 6)}`,
-            stake: stakeAmount[0],
-            rating: Math.floor(Math.random() * 800) + 1200,
-          };
-          setFoundMatch(mockPlayer);
-          setIsSearching(false);
-        }
-      }, 1000);
+        // Check queue count
+        checkQueueCount();
+        // Try to find match
+        tryMatchmaking();
+      }, 2000);
     }
 
     return () => clearInterval(interval);
-  }, [isSearching, searchTime, stakeAmount]);
+  }, [isSearching, searchTime]);
 
-  const startSearching = () => {
+  const checkQueueCount = async () => {
+    const { count } = await supabase
+      .from('matchmaking_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'searching');
+    setPlayersInQueue(count || 0);
+  };
+
+  const tryMatchmaking = async () => {
+    if (!user || !queueEntryId) return;
+
+    // Look for a matching player
+    const tcSeconds = getTimeControlSeconds(timeControl);
+    const { data: matches } = await supabase
+      .from('matchmaking_queue')
+      .select('*')
+      .eq('status', 'searching')
+      .eq('currency', currency)
+      .eq('time_control', tcSeconds)
+      .gte('stake_amount', stakeAmount[0] * 0.8)
+      .lte('stake_amount', stakeAmount[0] * 1.2)
+      .neq('user_id', user.id)
+      .order('joined_at', { ascending: true })
+      .limit(1);
+
+    if (matches && matches.length > 0) {
+      const match = matches[0];
+      
+      // Create game
+      const avgStake = (stakeAmount[0] + match.stake_amount) / 2;
+      const { data: game, error: gameError } = await supabase
+        .from('games')
+        .insert({
+          creator_id: user.id,
+          opponent_id: match.user_id,
+          stake_amount: avgStake,
+          time_control: tcSeconds,
+          status: 'playing',
+          started_at: new Date().toISOString(),
+          creator_paid: true,
+          opponent_paid: true,
+          currency: currency,
+        })
+        .select()
+        .single();
+
+      if (gameError) return;
+
+      // Update both queue entries
+      await supabase
+        .from('matchmaking_queue')
+        .update({ status: 'matched', matched_at: new Date().toISOString(), game_id: game.id })
+        .in('id', [queueEntryId, match.id]);
+
+      setFoundMatch({
+        gameId: game.id,
+        opponentId: match.user_id,
+        stake: avgStake,
+        currency,
+      });
+      setIsSearching(false);
+    }
+  };
+
+  const startSearching = async () => {
+    if (!user) {
+      toast.error('Debes iniciar sesión');
+      return;
+    }
+
+    const currentBalance = currency === 'USDT' ? (profile?.balance_usdt || 0) : (profile?.balance || 0);
+    if (stakeAmount[0] > currentBalance) {
+      toast.error(`Balance insuficiente de ${currency}`);
+      return;
+    }
+
     setSearchTime(0);
     setFoundMatch(null);
+
+    // Insert into queue
+    const tcSeconds = getTimeControlSeconds(timeControl);
+    const { data, error } = await supabase
+      .from('matchmaking_queue')
+      .insert({
+        user_id: user.id,
+        stake_amount: stakeAmount[0],
+        currency,
+        time_control: tcSeconds,
+        rating: profile?.rating || 1200,
+        status: 'searching',
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        // Already in queue, update
+        const { data: updated } = await supabase
+          .from('matchmaking_queue')
+          .update({
+            stake_amount: stakeAmount[0],
+            currency,
+            time_control: tcSeconds,
+            status: 'searching',
+            joined_at: new Date().toISOString(),
+          })
+          .eq('user_id', user.id)
+          .eq('status', 'searching')
+          .select()
+          .single();
+        if (updated) setQueueEntryId(updated.id);
+      } else {
+        toast.error('Error al buscar partida');
+        return;
+      }
+    } else if (data) {
+      setQueueEntryId(data.id);
+    }
+
     setIsSearching(true);
     toast.info('Buscando oponente...');
   };
 
-  const cancelSearch = () => {
+  const cancelSearch = async () => {
     setIsSearching(false);
     setSearchTime(0);
+    
+    if (queueEntryId) {
+      await supabase
+        .from('matchmaking_queue')
+        .delete()
+        .eq('id', queueEntryId);
+      setQueueEntryId(null);
+    }
+    
     toast.info('Búsqueda cancelada');
   };
 
@@ -85,8 +229,14 @@ const Matchmaking = () => {
     navigate('/play');
   };
 
-  const declineMatch = () => {
+  const declineMatch = async () => {
     setFoundMatch(null);
+    if (queueEntryId) {
+      await supabase
+        .from('matchmaking_queue')
+        .delete()
+        .eq('id', queueEntryId);
+    }
     toast.info('Partida rechazada');
   };
 
@@ -110,7 +260,7 @@ const Matchmaking = () => {
             <span className="gradient-text">Matchmaking</span>
           </h1>
           <p className="text-sm text-muted-foreground">
-            Encuentra oponentes de tu nivel
+            Encuentra oponentes de tu nivel • BNB & USDT
           </p>
         </motion.div>
 
@@ -135,9 +285,8 @@ const Matchmaking = () => {
                 ¡Oponente Encontrado!
               </h2>
               <div className="glass-card p-4 mb-4">
-                <p className="font-mono text-sm mb-1">{foundMatch.address}</p>
                 <p className="text-muted-foreground text-sm">
-                  Rating: {foundMatch.rating} • Apuesta: {foundMatch.stake} ETH
+                  Apuesta: {foundMatch.stake} {foundMatch.currency}
                 </p>
               </div>
               <div className="flex gap-3 justify-center">
@@ -176,7 +325,7 @@ const Matchmaking = () => {
                 {playersInQueue} jugadores en cola
               </p>
               <div className="flex gap-2 justify-center text-xs text-muted-foreground mb-6">
-                <span className="px-2 py-1 rounded bg-secondary">{stakeAmount[0]} ETH</span>
+                <span className="px-2 py-1 rounded bg-secondary">{stakeAmount[0]} {currency}</span>
                 <span className="px-2 py-1 rounded bg-secondary">{timeControl}</span>
               </div>
               <Button variant="outline" onClick={cancelSearch}>
@@ -191,6 +340,37 @@ const Matchmaking = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
+              {/* Currency Selection */}
+              <div className="glass-card p-5 mb-4">
+                <h3 className="font-semibold mb-3">Moneda</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant={currency === 'BNB' ? 'default' : 'outline'}
+                    onClick={() => setCurrency('BNB')}
+                    className="h-auto py-3"
+                  >
+                    <div className="text-center">
+                      <p className="font-bold">BNB</p>
+                      <p className="text-[10px] opacity-70">
+                        Balance: {(profile?.balance || 0).toFixed(4)}
+                      </p>
+                    </div>
+                  </Button>
+                  <Button
+                    variant={currency === 'USDT' ? 'default' : 'outline'}
+                    onClick={() => setCurrency('USDT')}
+                    className="h-auto py-3"
+                  >
+                    <div className="text-center">
+                      <p className="font-bold">USDT</p>
+                      <p className="text-[10px] opacity-70">
+                        Balance: {(profile?.balance_usdt || 0).toFixed(2)}
+                      </p>
+                    </div>
+                  </Button>
+                </div>
+              </div>
+
               {/* Stake Selection */}
               <div className="glass-card p-5 mb-4">
                 <div className="flex items-center gap-2 mb-4">
@@ -201,33 +381,18 @@ const Matchmaking = () => {
                   <Slider
                     value={stakeAmount}
                     onValueChange={setStakeAmount}
-                    min={0.01}
-                    max={1}
-                    step={0.01}
+                    min={currency === 'USDT' ? 1 : 0.01}
+                    max={currency === 'USDT' ? 100 : 1}
+                    step={currency === 'USDT' ? 1 : 0.01}
                     className="mb-2"
                   />
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>0.01 ETH</span>
+                    <span>{currency === 'USDT' ? '1' : '0.01'} {currency}</span>
                     <span className="text-primary font-semibold">
-                      {stakeAmount[0].toFixed(2)} ETH
+                      {stakeAmount[0].toFixed(currency === 'USDT' ? 0 : 2)} {currency}
                     </span>
-                    <span>1.00 ETH</span>
+                    <span>{currency === 'USDT' ? '100' : '1.00'} {currency}</span>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {stakeRanges.map((range) => (
-                    <button
-                      key={range.label}
-                      onClick={() => setStakeAmount([(range.min + range.max) / 2])}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        stakeAmount[0] >= range.min && stakeAmount[0] <= range.max
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
                 </div>
               </div>
 
@@ -264,7 +429,7 @@ const Matchmaking = () => {
                 onClick={startSearching}
               >
                 <Zap className="w-5 h-5 mr-2" />
-                Buscar Partida
+                Buscar Partida ({currency})
               </Button>
             </motion.div>
           )}
@@ -278,9 +443,9 @@ const Matchmaking = () => {
           className="mt-6 grid grid-cols-3 gap-3"
         >
           {[
-            { label: 'En Cola', value: '127' },
-            { label: 'Partidas Hoy', value: '2.4K' },
-            { label: 'Apostado', value: '156 ETH' },
+            { label: 'En Cola', value: playersInQueue.toString() },
+            { label: 'Tiempo', value: timeControl },
+            { label: 'Moneda', value: currency },
           ].map((stat) => (
             <div key={stat.label} className="glass-card p-3 text-center">
               <p className="text-lg font-bold text-primary">{stat.value}</p>

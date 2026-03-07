@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { CurrencyType } from '@/lib/tokens';
 
 interface WithdrawModalProps {
   isOpen: boolean;
@@ -16,9 +17,12 @@ interface WithdrawModalProps {
 const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
   const [amount, setAmount] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
+  const [currency, setCurrency] = useState<CurrencyType>('BNB');
   const [isLoading, setIsLoading] = useState(false);
   
   const { user, profile, refreshProfile } = useAuth();
+
+  const currentBalance = currency === 'USDT' ? (profile?.balance_usdt || 0) : (profile?.balance || 0);
 
   const handleWithdraw = async () => {
     if (!user || !profile) return;
@@ -29,7 +33,7 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
       return;
     }
 
-    if (withdrawAmount > profile.balance) {
+    if (withdrawAmount > currentBalance) {
       toast.error('Balance insuficiente');
       return;
     }
@@ -42,25 +46,28 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
     setIsLoading(true);
 
     try {
-      // Create withdrawal request (pending - requires manual processing)
       const { error: txError } = await supabase.from('transactions').insert({
         user_id: user.id,
         type: 'withdrawal',
         amount: withdrawAmount,
         wallet_address: walletAddress,
         status: 'pending',
+        currency: currency,
       });
 
       if (txError) throw txError;
 
-      // Update profile balance
-      const newBalance = profile.balance - withdrawAmount;
+      const balanceField = currency === 'USDT' ? 'balance_usdt' : 'balance';
+      const newBalance = currentBalance - withdrawAmount;
+      
+      const updateData: any = { [balanceField]: newBalance };
+      if (currency === 'BNB') {
+        updateData.total_withdrawn = (profile.total_withdrawn || 0) + withdrawAmount;
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ 
-          balance: newBalance,
-          total_withdrawn: (profile.total_withdrawn || 0) + withdrawAmount
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (profileError) throw profileError;
@@ -68,7 +75,7 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
       await refreshProfile();
       
       toast.success('Retiro solicitado', { 
-        description: 'Tu retiro será procesado en las próximas 24 horas'
+        description: `Tu retiro de ${withdrawAmount} ${currency} será procesado en 24 horas`
       });
       
       setAmount('');
@@ -84,7 +91,9 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
     }
   };
 
-  const quickAmounts = [0.01, 0.05, 0.1];
+  const quickAmountsBNB = [0.01, 0.05, 0.1];
+  const quickAmountsUSDT = [5, 10, 25];
+  const quickAmounts = currency === 'USDT' ? quickAmountsUSDT : quickAmountsBNB;
 
   if (!isOpen) return null;
 
@@ -109,7 +118,7 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-destructive to-red-600 flex items-center justify-center">
                 <ArrowUp className="w-5 h-5 text-white" />
               </div>
-              <h2 className="text-xl font-bold">Retirar BNB</h2>
+              <h2 className="text-xl font-bold">Retirar</h2>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
@@ -117,11 +126,31 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
           </div>
 
           <div className="space-y-6">
-            {/* Current balance */}
+            {/* Currency selector */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={currency === 'BNB' ? 'default' : 'outline'}
+                onClick={() => setCurrency('BNB')}
+                className="h-auto py-2"
+              >
+                <span className="font-bold">BNB</span>
+              </Button>
+              <Button
+                variant={currency === 'USDT' ? 'default' : 'outline'}
+                onClick={() => setCurrency('USDT')}
+                className="h-auto py-2"
+              >
+                <span className="font-bold">USDT</span>
+              </Button>
+            </div>
+
+            {/* Balance */}
             <div className="glass-card p-4 bg-primary/5">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Balance disponible:</span>
-                <span className="font-bold text-primary">{profile?.balance?.toFixed(4) || '0.0000'} BNB</span>
+                <span className="font-bold text-primary">
+                  {currentBalance.toFixed(currency === 'USDT' ? 2 : 4)} {currency}
+                </span>
               </div>
             </div>
 
@@ -138,23 +167,23 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
               />
             </div>
 
-            {/* Amount input */}
+            {/* Amount */}
             <div className="space-y-2">
               <Label htmlFor="amount">Monto a retirar</Label>
               <div className="relative">
                 <Input
                   id="amount"
                   type="number"
-                  step="0.001"
-                  min="0.001"
-                  max={profile?.balance || 0}
+                  step={currency === 'USDT' ? '1' : '0.001'}
+                  min={currency === 'USDT' ? '1' : '0.001'}
+                  max={currentBalance}
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   className="pr-16 text-lg"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                  BNB
+                  {currency}
                 </span>
               </div>
             </div>
@@ -168,7 +197,7 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
                   size="sm"
                   className="flex-1"
                   onClick={() => setAmount(quickAmount.toString())}
-                  disabled={quickAmount > (profile?.balance || 0)}
+                  disabled={quickAmount > currentBalance}
                 >
                   {quickAmount}
                 </Button>
@@ -177,7 +206,7 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
                 variant="outline"
                 size="sm"
                 className="flex-1"
-                onClick={() => setAmount(profile?.balance?.toString() || '0')}
+                onClick={() => setAmount(currentBalance.toString())}
               >
                 Max
               </Button>
@@ -195,10 +224,10 @@ const WithdrawModal = ({ isOpen, onClose }: WithdrawModalProps) => {
               className="w-full h-12"
               variant="destructive"
               onClick={handleWithdraw}
-              disabled={isLoading || !amount || !walletAddress || parseFloat(amount) > (profile?.balance || 0)}
+              disabled={isLoading || !amount || !walletAddress || parseFloat(amount) > currentBalance}
             >
               {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Solicitar Retiro
+              Solicitar Retiro de {amount || '0'} {currency}
             </Button>
           </div>
         </motion.div>
