@@ -106,7 +106,6 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
     
     const success = await connect();
     if (success) {
-      // Auto-switch to BSC for low fees
       try {
         await switchToBSC(false);
         toast.success('MetaMask conectada a BNB Smart Chain', {
@@ -134,7 +133,7 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
     {
       id: 'binance',
       name: 'Binance Wallet',
-      icon: '💛',
+      icon: '',
       color: 'from-yellow-500 to-yellow-600',
       checkInstalled: checkBinanceWallet,
       connect: connectBinanceWallet,
@@ -142,7 +141,7 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
     {
       id: 'trust',
       name: 'Trust Wallet',
-      icon: '🔵',
+      icon: '',
       color: 'from-blue-500 to-blue-600',
       checkInstalled: checkTrustWallet,
       connect: connectTrustWallet,
@@ -206,23 +205,50 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
 
   if (!isOpen) return null;
 
+  const renderWalletIcon = (wallet: WalletOption) => {
+    if (wallet.id === 'metamask') {
+      return <span className="text-2xl">🦊</span>;
+    }
+    if (wallet.id === 'binance') {
+      return (
+        <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+          <path d="M16 2L19.09 5.09L10.18 14L7.09 10.91L16 2Z" fill="#F3BA2F"/>
+          <path d="M21.82 7.82L24.91 10.91L16 19.82L7.09 10.91L10.18 7.82L16 13.64L21.82 7.82Z" fill="#F3BA2F"/>
+          <path d="M4.27 13.64L7.36 10.55L10.45 13.64L7.36 16.73L4.27 13.64Z" fill="#F3BA2F"/>
+          <path d="M7.09 19.45L16 28.36L24.91 19.45L28 22.55L16 34.55L4 22.55L7.09 19.45Z" fill="#F3BA2F"/>
+          <path d="M21.55 13.64L24.64 10.55L27.73 13.64L24.64 16.73L21.55 13.64Z" fill="#F3BA2F"/>
+          <path d="M19.09 16L16 19.09L12.91 16L16 12.91L19.09 16Z" fill="#F3BA2F"/>
+        </svg>
+      );
+    }
+    if (wallet.id === 'trust') {
+      return (
+        <svg viewBox="0 0 32 32" className="w-6 h-6" fill="none">
+          <path d="M16 3C16 3 26 7 26 16C26 25 16 29 16 29C16 29 6 25 6 16C6 7 16 3 16 3Z" fill="#3375BB" stroke="#3375BB" strokeWidth="1"/>
+          <path d="M12 15.5L15 18.5L21 12.5" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      );
+    }
+    return null;
+  };
+
   return (
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto pt-8"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         onClick={handleClose}
       >
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="glass-card w-full max-w-md p-6 my-auto"
+          className="glass-card w-full max-w-md p-6 max-h-[85vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-5">
             <h2 className="text-xl font-bold">
               {mode === 'options' && 'Conectar'}
               {mode === 'email-login' && 'Iniciar Sesión'}
@@ -234,9 +260,9 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
           </div>
 
           {mode === 'options' && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground mb-4">
-                Conecta tu wallet para jugar con BNB en Binance Smart Chain (comisiones bajas ~$0.01)
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground mb-3">
+                Conecta tu wallet para jugar con BNB o USDT en BNB Smart Chain
               </p>
 
               {/* Wallet Options */}
@@ -249,8 +275,8 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
                     onClick={() => handleWalletConnect(wallet)}
                     disabled={isLoading}
                   >
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${wallet.color} flex items-center justify-center mr-3 text-xl`}>
-                      {wallet.icon}
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${wallet.color} flex items-center justify-center mr-3`}>
+                      {renderWalletIcon(wallet)}
                     </div>
                     <div className="flex-1">
                       <p className="font-medium">{wallet.name}</p>
@@ -263,7 +289,7 @@ const ConnectModal = ({ isOpen, onClose }: ConnectModalProps) => {
                 ))}
               </div>
 
-              <div className="relative my-6">
+              <div className="relative my-5">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-border" />
                 </div>
