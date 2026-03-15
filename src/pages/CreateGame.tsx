@@ -261,7 +261,7 @@ const CreateGame = () => {
                         value={wager}
                         onChange={(e) => setWager(e.target.value)}
                         className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 text-xl font-mono text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
-                        placeholder={paymentMethod === 'web3' ? (currency === 'USDT' ? '1.00' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
+                        placeholder={paymentMethod === 'web3' ? (currency === 'USDT' ? '0.10' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
                       />
                     </div>
                     <div className="flex flex-col gap-2 w-24">
