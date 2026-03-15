@@ -1,5 +1,6 @@
 import { Contract, BrowserProvider, formatEther, parseEther, formatUnits, parseUnits, keccak256, toUtf8Bytes } from 'ethers';
 import { CurrencyType, getTokenAddress, approveToken } from './tokens';
+import { getActiveProvider } from '@/contexts/WalletContext';
 
 // Contract ABI - matches ChessBetV2.sol
 export const CHESS_BET_ABI = [
@@ -70,12 +71,13 @@ export const generateGameId = (creator: string, timestamp: number): string => {
 };
 
 export const switchToBSC = async (testnet = false): Promise<boolean> => {
-  if (!window.ethereum) return false;
+  const activeProvider = getActiveProvider();
+  if (!activeProvider) return false;
 
   const network = testnet ? BSC_TESTNET : BSC_MAINNET;
 
   try {
-    await window.ethereum.request({
+    await activeProvider.request({
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: network.chainId }],
     });
@@ -83,7 +85,7 @@ export const switchToBSC = async (testnet = false): Promise<boolean> => {
   } catch (switchError: any) {
     if (switchError.code === 4902) {
       try {
-        await window.ethereum.request({
+        await activeProvider.request({
           method: 'wallet_addEthereumChain',
           params: [network],
         });
@@ -99,10 +101,11 @@ export const switchToBSC = async (testnet = false): Promise<boolean> => {
 };
 
 export const getContract = async (signer?: any): Promise<Contract | null> => {
-  if (!window.ethereum) return null;
+  const activeProvider = getActiveProvider();
+  if (!activeProvider) return null;
   
   try {
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(activeProvider);
     const signerOrProvider = signer || await provider.getSigner();
     return new Contract(CONTRACT_ADDRESS, CHESS_BET_ABI, signerOrProvider);
   } catch (error) {
@@ -132,7 +135,7 @@ export const createGameOnChain = async (
     const contract = await getContract();
     if (!contract) throw new Error('Contract not available');
 
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(getActiveProvider());
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
@@ -289,7 +292,7 @@ export const settleGameOnChain = async (
     const contract = await getContract();
     if (!contract) return { status: 'error', reason: 'Contract not available' };
 
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(getActiveProvider());
     const signer = await provider.getSigner();
     const signerAddress = await signer.getAddress();
 
@@ -347,7 +350,7 @@ export type ContractVersion = 'v1' | 'v2' | 'unknown';
  * by checking if the `usdtToken` view function exists.
  */
 export const detectContractVersion = async (): Promise<ContractVersion> => {
-  if (!window.ethereum) return 'unknown';
+  if (!getActiveProvider()) return 'unknown';
   try {
     const contract = await getContract();
     if (!contract) return 'unknown';

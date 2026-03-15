@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { detectContractVersion, ContractVersion, CONTRACT_ADDRESS } from '@/lib/contract';
+import { getActiveProvider } from '@/contexts/WalletContext';
 
 export const useContractVersion = () => {
   const [version, setVersion] = useState<ContractVersion>('unknown');
@@ -8,7 +9,7 @@ export const useContractVersion = () => {
   const isDeployed = (CONTRACT_ADDRESS as string) !== '0x0000000000000000000000000000000000000000';
 
   useEffect(() => {
-    if (!isDeployed || !window.ethereum) {
+    if (!isDeployed || !getActiveProvider()) {
       setChecking(false);
       return;
     }

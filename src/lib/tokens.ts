@@ -1,4 +1,5 @@
 import { Contract, BrowserProvider, formatUnits, parseUnits } from 'ethers';
+import { getActiveProvider } from '@/contexts/WalletContext';
 
 // USDT BEP-20 addresses
 export const USDT_BSC_MAINNET = '0x55d398326f99059fF775485246999027B3197955';
@@ -22,9 +23,10 @@ export const getTokenAddress = (testnet = false): string => {
 };
 
 export const getTokenContract = async (tokenAddress: string): Promise<Contract | null> => {
-  if (!window.ethereum) return null;
+  const activeProvider = getActiveProvider();
+  if (!activeProvider) return null;
   try {
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(activeProvider);
     const signer = await provider.getSigner();
     return new Contract(tokenAddress, ERC20_ABI, signer);
   } catch (error) {
