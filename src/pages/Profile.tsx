@@ -96,7 +96,7 @@ interface HistorySessionDetail extends HistorySessionSummary {
   messages: HistorySessionMessage[];
 }
 
-const API_URL = coachApiUrl('/api');
+
 
 const Profile = () => {
   const navigate = useNavigate();
