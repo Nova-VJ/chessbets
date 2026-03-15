@@ -304,38 +304,27 @@ export default function HistoricalPlay() {
     setShowEvalModal(true);
     
     try {
-      const res = await fetchCoachApi('/api/game/evaluate', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          user_id: profile?.id,
-          opponent_id: selectedCoachId,
-          pgn: game.pgn(),
-          result: result,
-          time_control: selectedTime,
-          session_token: completedSessionToken
-        })
-      }, { retries: 2 });
-      if (res.ok) {
-        const data = await res.json();
-        setEvaluation(data);
-        
-        if (data.xp_earned > 0) {
-          triggerNotification({
-            type: 'xp',
-            value: data.xp_earned || 250,
-            label: 'Duelo Finalizado'
-          });
-          triggerNotification({
-            type: 'mission',
-            value: 'Lección Aprendida',
-            label: `Vs ${activeCoach?.name}`
-          });
-        }
-        loadHistory();
+      const data = await invokeChessEvaluate({
+        user_id: profile?.id,
+        opponent_id: selectedCoachId,
+        pgn: game.pgn(),
+        result: result,
+        time_control: selectedTime,
+        session_token: completedSessionToken
+      });
+      setEvaluation(data);
+      
+      if (data.xp_earned > 0) {
+        triggerNotification({
+          type: 'xp',
+          value: data.xp_earned || 250,
+          label: 'Duelo Finalizado'
+        });
+        triggerNotification({
+          type: 'mission',
+          value: 'Lección Aprendida',
+          label: `Vs ${activeCoach?.name}`
+        });
       }
     } catch (e) {
       toast.error("Error al obtener la evaluación del maestro.");
