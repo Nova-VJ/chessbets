@@ -1,4 +1,5 @@
 import { Contract, BrowserProvider, formatUnits, parseUnits } from 'ethers';
+import { getActiveProvider } from '@/contexts/WalletContext';
 
 // USDT BEP-20 addresses
 export const USDT_BSC_MAINNET = '0x55d398326f99059fF775485246999027B3197955';

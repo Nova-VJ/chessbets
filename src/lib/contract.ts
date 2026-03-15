@@ -1,5 +1,6 @@
 import { Contract, BrowserProvider, formatEther, parseEther, formatUnits, parseUnits, keccak256, toUtf8Bytes } from 'ethers';
 import { CurrencyType, getTokenAddress, approveToken } from './tokens';
+import { getActiveProvider } from '@/contexts/WalletContext';
 
 // Contract ABI - matches ChessBetV2.sol
 export const CHESS_BET_ABI = [

@@ -162,6 +162,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
+  // Sync global provider ref for non-React code (contract.ts, tokens.ts)
+  useEffect(() => {
+    setActiveProviderGlobal(activeProviderRef.current);
+  }, [state.isConnected, state.address]);
+
   // Listen for account and chain changes on the active provider
   useEffect(() => {
     const provider = activeProviderRef.current;
