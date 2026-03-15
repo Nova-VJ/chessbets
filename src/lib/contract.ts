@@ -101,10 +101,11 @@ export const switchToBSC = async (testnet = false): Promise<boolean> => {
 };
 
 export const getContract = async (signer?: any): Promise<Contract | null> => {
-  if (!window.ethereum) return null;
+  const activeProvider = getActiveProvider();
+  if (!activeProvider) return null;
   
   try {
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(activeProvider);
     const signerOrProvider = signer || await provider.getSigner();
     return new Contract(CONTRACT_ADDRESS, CHESS_BET_ABI, signerOrProvider);
   } catch (error) {
