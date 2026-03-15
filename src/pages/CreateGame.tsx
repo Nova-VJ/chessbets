@@ -113,15 +113,29 @@ const CreateGame = () => {
 
       if (error) {
         console.error('Error creating lobby game:', error);
-        toast.error('Error guardando en base de datos', {
-          description: error.message
-        });
-        // Si falla aquí, los fondos están en el contrato pero no en la BD.
-        // Lo ideal sería un retry o un botón de reembolso de emergencia en el perfil.
-      } else {
-        toast.success('Partida publicada en el lobby de apuestas');
-        navigate('/lobby');
+
+        if (paymentMethod === 'web3' && contractGameId) {
+          toast.loading('Revirtiendo contrato on-chain por fallo de base de datos...', { id: 'rollback-tx' });
+          const rollbackTx = await cancelGameOnChain(contractGameId);
+
+          if (rollbackTx) {
+            toast.warning('Se canceló la partida on-chain para proteger fondos', {
+              id: 'rollback-tx',
+              description: 'Tus fondos quedaron en balance del contrato. Puedes retirarlos desde tu perfil.'
+            });
+          } else {
+            toast.error('No se pudo revertir on-chain automáticamente', {
+              id: 'rollback-tx',
+              description: 'Cancela manualmente o contacta soporte con tu hash de transacción.'
+            });
+          }
+        }
+
+        throw new Error(error.message);
       }
+
+      toast.success('Partida publicada en el lobby de apuestas');
+      navigate('/lobby');
     } catch (error: any) {
       console.error('Create error:', error);
       toast.error('Error al publicar', {
