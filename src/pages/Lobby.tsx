@@ -126,8 +126,8 @@ const Lobby = () => {
 
   const fetchGames = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('lobby_games')
+    const { data, error } = await (supabase
+      .from('lobby_games') as any)
       .select(`
         *,
         creator:profiles!creator_user_id (
