@@ -104,22 +104,13 @@ const AICoach = ({ profile }: AICoachProps) => {
     setIsSendingChat(true);
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          message: userMsg,
-          persona: selectedCoachId,
-          interaction_mode: 'coach_room',
-          message_kind: 'user',
-          session_token: sessionToken
-        })
+      const data = await invokeChessChat({
+        message: userMsg,
+        persona: selectedCoachId,
+        interaction_mode: 'coach_room',
+        message_kind: 'user',
+        session_token: sessionToken
       });
-      if (!res.ok) throw new Error("Chat failed");
-      const data = await res.json();
       if (!data.reply) throw new Error("Chat reply missing");
       setChatHistories(prev => ({
         ...prev,
