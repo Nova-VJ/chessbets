@@ -233,7 +233,7 @@ const Play = () => {
   const sendMessage = async () => {
     if (!newMessage.trim() || !user) return;
     
-    await supabase.from('game_messages').insert({
+    await (supabase.from('game_messages') as any).insert({
       game_id: id,
       user_id: user.id,
       content: newMessage.trim()

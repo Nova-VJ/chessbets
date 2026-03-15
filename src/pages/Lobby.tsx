@@ -164,8 +164,8 @@ const Lobby = () => {
       return;
     }
 
-    const { error } = await supabase
-      .from('lobby_games')
+    const { error } = await (supabase
+      .from('lobby_games') as any)
       .update({
         joiner_user_id: user.id,
         status: 'pending_accept',

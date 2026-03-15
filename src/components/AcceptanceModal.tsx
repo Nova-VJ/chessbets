@@ -168,8 +168,8 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
   };
 
   const handleTimeout = async () => {
-    await supabase
-      .from('lobby_games')
+    await (supabase
+      .from('lobby_games') as any)
       .update({ status: 'expired' })
       .eq('id', lobbyGame.id);
     onClose();

@@ -87,8 +87,8 @@ const CreateGame = () => {
       }
 
       // 2. Guardar en Supabase Lobby
-      const { data, error } = await supabase
-        .from('lobby_games')
+      const { data, error } = await (supabase
+        .from('lobby_games') as any)
         .insert({
           creator_user_id: user.id,
           status: 'waiting',
