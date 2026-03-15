@@ -61,8 +61,8 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
     setIsAccepting(true);
     
     // 1. Create the active game record
-    const { data: game, error: gameError } = await supabase
-      .from('games')
+    const { data: game, error: gameError } = await (supabase
+      .from('games') as any)
       .insert({
         lobby_id: lobbyGame.id,
         status: 'in_progress',
