@@ -1,1 +1,13 @@
 project_id = "wycmfpgpsqmumloglkko"
+
+[functions.chess-chat]
+verify_jwt = false
+
+[functions.chess-move]
+verify_jwt = false
+
+[functions.chess-evaluate]
+verify_jwt = false
+
+[functions.wiki-profile]
+verify_jwt = false
