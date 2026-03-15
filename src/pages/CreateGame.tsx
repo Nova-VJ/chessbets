@@ -156,7 +156,7 @@ const CreateGame = () => {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-zinc-300">
       <Header />
-
+      <ContractVersionBanner />
       <main className="container mx-auto px-4 pt-24 pb-12 flex items-center justify-center">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
