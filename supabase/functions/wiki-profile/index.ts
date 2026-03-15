@@ -10,7 +10,7 @@ const USER_AGENT = "GameChessCoach/1.0 (educacionxunfuturo@gmail.com)";
 const CACHE_TTL_HOURS = 168; // 7 days
 
 const QID_MAP: Record<string, string> = {
-  fischer: "Q855",
+  fischer: "Q41314",
   tal: "Q9492",
   capablanca: "Q200726",
   carlsen: "Q81498",
