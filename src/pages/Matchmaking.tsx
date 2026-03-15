@@ -13,7 +13,7 @@ import { CurrencyType } from '@/lib/tokens';
 
 const Matchmaking = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, session, profile } = useAuth();
   const [isSearching, setIsSearching] = useState(false);
   const [searchTime, setSearchTime] = useState(0);
   const [stakeAmount, setStakeAmount] = useState([0.05]);
@@ -94,7 +94,8 @@ const Matchmaking = () => {
   };
 
   const tryMatchmaking = async () => {
-    if (!user || !queueEntryId) return;
+    const effectiveUser = user ?? session?.user;
+    if (!effectiveUser || !queueEntryId) return;
 
     // Look for a matching player
     const tcSeconds = getTimeControlSeconds(timeControl);
@@ -106,7 +107,7 @@ const Matchmaking = () => {
       .eq('time_control', tcSeconds)
       .gte('stake_amount', stakeAmount[0] * 0.8)
       .lte('stake_amount', stakeAmount[0] * 1.2)
-      .neq('user_id', user.id)
+      .neq('user_id', effectiveUser.id)
       .order('joined_at', { ascending: true })
       .limit(1);
 
@@ -118,7 +119,7 @@ const Matchmaking = () => {
       const { data: game, error: gameError } = await supabase
         .from('games')
         .insert({
-          creator_id: user.id,
+          creator_id: effectiveUser.id,
           opponent_id: match.user_id,
           stake_amount: avgStake,
           time_control: tcSeconds,
@@ -150,12 +151,10 @@ const Matchmaking = () => {
   };
 
   const startSearching = async () => {
-    if (!user) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        toast.error('Debes iniciar sesión o conectar tu wallet');
-        return;
-      }
+    const effectiveUser = user ?? session?.user;
+    if (!effectiveUser) {
+      toast.error('Debes iniciar sesión o conectar tu wallet');
+      return;
     }
 
     const currentBalance = currency === 'USDT' ? (profile?.balance_usdt || 0) : (profile?.balance || 0);
@@ -172,7 +171,7 @@ const Matchmaking = () => {
     const { data, error } = await supabase
       .from('matchmaking_queue')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUser.id,
         stake_amount: stakeAmount[0],
         currency,
         time_control: tcSeconds,
@@ -194,7 +193,7 @@ const Matchmaking = () => {
             status: 'searching',
             joined_at: new Date().toISOString(),
           })
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUser.id)
           .eq('status', 'searching')
           .select()
           .single();

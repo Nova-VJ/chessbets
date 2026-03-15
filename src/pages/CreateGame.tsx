@@ -34,7 +34,7 @@ const PRESETS = [
 
 const CreateGame = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, session, profile } = useAuth();
   const [selectedPreset, setSelectedPreset] = useState(PRESETS[1]);
   const [customMins, setCustomMins] = useState(5);
   const [customInc, setCustomInc] = useState(0);
@@ -45,12 +45,10 @@ const CreateGame = () => {
   const { isV2, supportsUSDT } = useContractVersion();
 
   const handleCreate = async () => {
-    if (!user) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        toast.error('Debes iniciar sesión o conectar tu wallet');
-        return;
-      }
+    const effectiveUser = user ?? session?.user;
+    if (!effectiveUser) {
+      toast.error('Debes iniciar sesión o conectar tu wallet');
+      return;
     }
 
     const minWager = paymentMethod === 'web3'
@@ -105,7 +103,7 @@ const CreateGame = () => {
       const { data, error } = await (supabase
         .from('lobby_games') as any)
         .insert({
-          creator_user_id: user.id,
+          creator_user_id: effectiveUser.id,
           status: 'waiting',
           time_control_minutes: selectedPreset ? selectedPreset.mins : customMins,
           increment_seconds: selectedPreset ? selectedPreset.inc : customInc,

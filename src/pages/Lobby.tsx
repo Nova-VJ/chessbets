@@ -45,7 +45,7 @@ interface LobbyGame {
 
 const Lobby = () => {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile, isSyncing } = useAuth();
+  const { user, session, profile, refreshProfile, isSyncing } = useAuth();
   const [games, setGames] = useState<LobbyGame[]>([]);
   const [activeHandshakeGame, setActiveHandshakeGame] = useState<any>(null);
   const [filterMode, setFilterMode] = useState<string>('all');
@@ -152,25 +152,31 @@ const Lobby = () => {
   };
 
   const handleJoin = async (gameId: string) => {
-    if (!user) {
+    const effectiveUser = user ?? session?.user;
+
+    if (!effectiveUser) {
       if (isSyncing) {
         toast.info('Vinculando tu wallet... intenta de nuevo en unos segundos');
         return;
       }
-      // Wallet connected but shadow login hasn't fired yet — retry once
       await refreshProfile();
-      // Re-check after refresh attempt
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      const { data: { session: latestSession } } = await supabase.auth.getSession();
+      if (!latestSession?.user) {
         toast.error('Debes iniciar sesión o conectar tu wallet para jugar');
         return;
       }
     }
 
+    const player = effectiveUser ?? (await supabase.auth.getSession()).data.session?.user;
+    if (!player) {
+      toast.error('No se pudo recuperar tu sesión');
+      return;
+    }
+
     const { error } = await (supabase
       .from('lobby_games') as any)
       .update({
-        joiner_user_id: user.id,
+        joiner_user_id: player.id,
         status: 'pending_accept',
         accept_deadline_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
         joiner_rating_snapshot: profile?.rating_blitz || 1200,
