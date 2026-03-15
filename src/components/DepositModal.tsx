@@ -90,8 +90,8 @@ const DepositModal = ({ isOpen, onClose }: DepositModalProps) => {
     setIsLoading(true);
 
     try {
-      const provider = new BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
+      const { getActiveProvider } = await import('@/contexts/WalletContext');
+      const provider = new BrowserProvider(getActiveProvider());
       let txHash: string;
 
       if (currency === 'USDT') {
