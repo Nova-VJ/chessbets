@@ -153,26 +153,110 @@ const Profile = () => {
   };
 
   const loadHistory = async () => {
-    if (!profile || !session?.access_token) return;
+    if (!profile?.id) return;
     setIsLoadingHistory(true);
     try {
-      const headers = { 'Authorization': `Bearer ${session.access_token}` };
-      const [gamesRes, sessionsRes] = await Promise.all([
-        fetch(`${API_URL}/history`, { headers }),
-        fetch(`${API_URL}/history/sessions`, { headers }),
-      ]);
+      const COACH_NAMES: Record<string, string> = {
+        fischer: "Bobby Fischer", tal: "Mikhail Tal", capablanca: "Capablanca",
+        carlsen: "Magnus Carlsen", kasparov: "Garry Kasparov", general: "Coach IA",
+      };
 
-      if (gamesRes.ok) {
-        const data = await gamesRes.json();
-        setGameHistory(data.games || []);
+      // Load game history
+      const { data: games } = await supabase
+        .from('coach_game_history')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // Load conversation sessions (grouped by session_token)
+      const { data: convos } = await supabase
+        .from('coach_conversations')
+        .select('session_token, coach_id, content, role, interaction_mode, created_at')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      const sessions: HistorySessionSummary[] = [];
+
+      // Add game sessions
+      if (games) {
+        for (const g of games) {
+          sessions.push({
+            session_key: g.id,
+            session_token: g.session_token,
+            kind: 'game',
+            title: `Partida vs ${COACH_NAMES[g.coach_id] || g.coach_id}`,
+            coach_id: g.coach_id,
+            coach_name: COACH_NAMES[g.coach_id] || g.coach_id,
+            game_id: null,
+            date: g.created_at,
+            played_at: g.created_at,
+            result: g.result,
+            opening: g.opening,
+            time_control: g.time_control,
+            messages_count: 0,
+            interaction_modes: ['in_game'],
+            preview: g.review || `Resultado: ${g.result || '?'}`,
+            has_messages: false,
+          });
+        }
       }
 
-      if (sessionsRes.ok) {
-        const data = await sessionsRes.json();
-        setHistorySessions(data.sessions || []);
+      // Group conversations by session_token
+      if (convos) {
+        const sessionMap = new Map<string, typeof convos>();
+        for (const c of convos) {
+          const key = c.session_token;
+          if (!sessionMap.has(key)) sessionMap.set(key, []);
+          sessionMap.get(key)!.push(c);
+        }
+        for (const [token, msgs] of sessionMap) {
+          // Skip if already covered by a game session
+          if (sessions.some(s => s.session_token === token)) {
+            const existing = sessions.find(s => s.session_token === token);
+            if (existing) {
+              existing.messages_count = msgs.length;
+              existing.has_messages = true;
+            }
+            continue;
+          }
+          const first = msgs[msgs.length - 1]; // oldest
+          const coachId = first.coach_id;
+          sessions.push({
+            session_key: `conv-${token}`,
+            session_token: token,
+            kind: 'conversation',
+            title: `Consulta con ${COACH_NAMES[coachId] || coachId}`,
+            coach_id: coachId,
+            coach_name: COACH_NAMES[coachId] || coachId,
+            game_id: null,
+            date: first.created_at,
+            played_at: first.created_at,
+            result: null,
+            opening: null,
+            time_control: null,
+            messages_count: msgs.length,
+            interaction_modes: [...new Set(msgs.map(m => m.interaction_mode || 'coach_room'))],
+            preview: msgs.find(m => m.role === 'coach')?.content?.slice(0, 100) || 'Sin mensajes',
+            has_messages: true,
+          });
+        }
       }
+
+      // Sort by date
+      sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setHistorySessions(sessions);
+      setGameHistory(games?.map((g: any, i: number) => ({
+        id: i + 1,
+        date: new Date(g.created_at).toLocaleDateString('es'),
+        opponent: COACH_NAMES[g.coach_id] || g.coach_id,
+        opponent_id: g.coach_id,
+        result: g.result || '?',
+        rating: g.rating || 0,
+      })) || []);
     } catch (e) {
-      console.error(e);
+      console.error('Error loading history:', e);
     } finally {
       setIsLoadingHistory(false);
     }
