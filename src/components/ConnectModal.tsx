@@ -54,8 +54,24 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
   const { signUp, signIn, resetPassword } = useAuth();
   const { connect, hasMetaMask } = useWallet();
 
+  const getBinanceProvider = () => {
+    // Legacy Binance Chain Wallet
+    if ((window as any).BinanceChain) return (window as any).BinanceChain;
+    // Binance Web3 Wallet via dedicated namespace
+    if ((window as any).binanceWallet) return (window as any).binanceWallet;
+    // Check ethereum.providers array (EIP-5749 multi-wallet)
+    const providers = (window as any).ethereum?.providers;
+    if (Array.isArray(providers)) {
+      const binanceProvider = providers.find((p: any) => p.isBinance);
+      if (binanceProvider) return binanceProvider;
+    }
+    // Check if ethereum itself is Binance
+    if ((window as any).ethereum?.isBinance) return (window as any).ethereum;
+    return null;
+  };
+
   const checkBinanceWallet = () => {
-    return !!(window as any).BinanceChain || !!(window as any).ethereum?.isBinance || !!(window as any).binanceWallet;
+    return !!getBinanceProvider();
   };
 
   const checkTrustWallet = () => {
@@ -63,7 +79,7 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
   };
 
   const connectBinanceWallet = async (): Promise<boolean> => {
-    const binance = (window as any).BinanceChain || (window as any).binanceWallet || ((window as any).ethereum?.isBinance ? (window as any).ethereum : null);
+    const binance = getBinanceProvider();
     if (!binance) {
       toast.error('Binance Wallet no está instalada', {
         description: 'Instala la extensión de Binance Wallet',
