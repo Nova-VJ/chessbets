@@ -63,7 +63,7 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
   };
 
   const connectBinanceWallet = async (): Promise<boolean> => {
-    const binance = (window as any).BinanceChain;
+    const binance = (window as any).BinanceChain || (window as any).binanceWallet || ((window as any).ethereum?.isBinance ? (window as any).ethereum : null);
     if (!binance) {
       toast.error('Binance Wallet no está instalada', {
         description: 'Instala la extensión de Binance Wallet',
