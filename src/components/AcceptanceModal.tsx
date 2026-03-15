@@ -84,8 +84,8 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
     }
 
     // 2. Mark lobby game as in_progress
-    await supabase
-      .from('lobby_games')
+    await (supabase
+      .from('lobby_games') as any)
       .update({ status: 'in_progress' })
       .eq('id', lobbyGame.id);
 
