@@ -47,24 +47,22 @@ const AICoach = ({ profile }: AICoachProps) => {
   };
 
   const fetchInsights = async () => {
-    if (!profile?.id || !session?.access_token) {
-      setIsLoading(false);
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const res = await fetch(`${API_URL}/insights`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!res.ok) throw new Error("Error fetching insights");
-      const data = await res.json();
-      setInsights(data);
-    } catch (err) {
-      console.error(err);
-      setInsights(null);
-    } finally {
-      setIsLoading(false);
-    }
+    // Insights were from the Python backend - now return default state
+    setInsights({
+      state: 'active',
+      games_analyzed: 0,
+      books_ingested: 0,
+      overview: {
+        elo_trend: '+0',
+        estimated_title: 'Principiante',
+        verdict: 'Usa el chat con los maestros para recibir análisis personalizados de tus partidas.'
+      },
+      openings: { favorite: 'N/A', worst: 'N/A', tip: 'Juega más partidas para obtener datos.' },
+      tactics: { solved: 0, accuracy: 0, tip: 'Practica tácticas regularmente.' },
+      endgame: { accuracy: 0, tip: 'Los finales son clave para mejorar.' },
+      mental: { tilt_risk: 'Bajo', tip: 'Mantén la calma en posiciones complicadas.' }
+    });
+    setIsLoading(false);
   };
 
   useEffect(() => {
