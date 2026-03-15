@@ -340,6 +340,27 @@ export const getGameCreatedEvents = async (playerAddress: string): Promise<strin
 
 export const getContractAddress = () => CONTRACT_ADDRESS;
 
+export type ContractVersion = 'v1' | 'v2' | 'unknown';
+
+/**
+ * Detects if the deployed contract is V1 (BNB only) or V2 (BNB + USDT)
+ * by checking if the `usdtToken` view function exists.
+ */
+export const detectContractVersion = async (): Promise<ContractVersion> => {
+  if (!window.ethereum) return 'unknown';
+  try {
+    const contract = await getContract();
+    if (!contract) return 'unknown';
+
+    // V2 has usdtToken() — V1 does not
+    await contract.usdtToken();
+    return 'v2';
+  } catch {
+    // If usdtToken() reverts or doesn't exist, it's V1
+    return 'v1';
+  }
+};
+
 export const depositToPlatform = async (amount: string, currency: CurrencyType = 'BNB'): Promise<string | null> => {
   try {
     const contract = await getContract();
