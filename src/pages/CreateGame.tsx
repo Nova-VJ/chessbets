@@ -20,7 +20,7 @@ import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { createGameOnChain } from '@/lib/contract';
+import { createGameOnChain, cancelGameOnChain } from '@/lib/contract';
 import { CurrencyType } from '@/lib/tokens';
 
 const PRESETS = [
@@ -47,9 +47,15 @@ const CreateGame = () => {
       return;
     }
 
-    const minWager = currency === 'USDT' ? 0.01 : 0.00001;
-    if (!wager || isNaN(Number(wager)) || Number(wager) < minWager) {
-      toast.error(`El monto de la apuesta debe ser de al menos ${minWager} ${currency}`);
+    const minWager = paymentMethod === 'web3'
+      ? (currency === 'USDT' ? 1 : 0.00001)
+      : (currency === 'USDT' ? 0.01 : 0.00001);
+    const maxWager = paymentMethod === 'web3'
+      ? (currency === 'USDT' ? 10000 : 100)
+      : 10000;
+
+    if (!wager || isNaN(Number(wager)) || Number(wager) < minWager || Number(wager) > maxWager) {
+      toast.error(`El monto debe estar entre ${minWager} y ${maxWager} ${currency} para ${paymentMethod === 'web3' ? 'Smart Contract' : 'saldo interno'}`);
       return;
     }
 
@@ -107,15 +113,29 @@ const CreateGame = () => {
 
       if (error) {
         console.error('Error creating lobby game:', error);
-        toast.error('Error guardando en base de datos', {
-          description: error.message
-        });
-        // Si falla aquí, los fondos están en el contrato pero no en la BD.
-        // Lo ideal sería un retry o un botón de reembolso de emergencia en el perfil.
-      } else {
-        toast.success('Partida publicada en el lobby de apuestas');
-        navigate('/lobby');
+
+        if (paymentMethod === 'web3' && contractGameId) {
+          toast.loading('Revirtiendo contrato on-chain por fallo de base de datos...', { id: 'rollback-tx' });
+          const rollbackTx = await cancelGameOnChain(contractGameId);
+
+          if (rollbackTx) {
+            toast.warning('Se canceló la partida on-chain para proteger fondos', {
+              id: 'rollback-tx',
+              description: 'Tus fondos quedaron en balance del contrato. Puedes retirarlos desde tu perfil.'
+            });
+          } else {
+            toast.error('No se pudo revertir on-chain automáticamente', {
+              id: 'rollback-tx',
+              description: 'Cancela manualmente o contacta soporte con tu hash de transacción.'
+            });
+          }
+        }
+
+        throw new Error(error.message);
       }
+
+      toast.success('Partida publicada en el lobby de apuestas');
+      navigate('/lobby');
     } catch (error: any) {
       console.error('Create error:', error);
       toast.error('Error al publicar', {
@@ -229,12 +249,13 @@ const CreateGame = () => {
                     <div className="relative flex-1">
                       <input 
                         type="number"
-                        step={currency === 'USDT' ? "0.01" : "0.00001"}
-                        min={currency === 'USDT' ? "0.01" : "0.00001"}
+                        step={currency === 'USDT' ? '0.01' : '0.00001'}
+                        min={paymentMethod === 'web3' ? (currency === 'USDT' ? '1' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
+                        max={paymentMethod === 'web3' ? (currency === 'USDT' ? '10000' : '100') : '10000'}
                         value={wager}
                         onChange={(e) => setWager(e.target.value)}
                         className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-4 text-xl font-mono text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
-                        placeholder={currency === 'USDT' ? "0.01" : "0.00001"}
+                        placeholder={paymentMethod === 'web3' ? (currency === 'USDT' ? '1.00' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
                       />
                     </div>
                     <div className="flex flex-col gap-2 w-24">

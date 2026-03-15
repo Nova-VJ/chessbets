@@ -8,10 +8,13 @@ export const CHESS_BET_ABI = [
   "function joinGame(bytes32 gameId) external payable",
   "function joinGameToken(bytes32 gameId) external",
   "function cancelGame(bytes32 gameId) external",
+  "function finishGame(bytes32 gameId, address winner) external",
+  "function finishGameDraw(bytes32 gameId) external",
   "function deposit() external payable",
   "function depositToken(uint256 amount) external",
   "function withdraw() external",
   "function withdrawToken() external",
+  "function owner() external view returns (address)",
   "function getGame(bytes32 gameId) external view returns (address player1, address player2, uint256 stake, uint8 state, address winner, uint256 createdAt, bool isToken)",
   "function playerBalances(address player) external view returns (uint256)",
   "function playerTokenBalances(address player) external view returns (uint256)",
@@ -113,23 +116,39 @@ export const createGameOnChain = async (
   currency: CurrencyType = 'BNB'
 ): Promise<{ gameId: string; txHash: string } | null> => {
   try {
+    const amountNumber = Number(stakeAmount);
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+      throw new Error('Monto inválido');
+    }
+
+    if (currency === 'USDT' && amountNumber < 1) {
+      throw new Error('La apuesta mínima en USDT on-chain es 1 USDT');
+    }
+
+    if (currency === 'USDT' && amountNumber > 10000) {
+      throw new Error('La apuesta máxima en USDT on-chain es 10000 USDT');
+    }
+
     const contract = await getContract();
     if (!contract) throw new Error('Contract not available');
 
     const provider = new BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
-    
+
     const gameId = generateGameId(address, Date.now());
 
     let tx;
     if (currency === 'USDT') {
       const tokenAddress = getTokenAddress(false);
       const amountWei = parseUnits(stakeAmount, 18);
-      
+
       // Approve first
-      await approveToken(tokenAddress, CONTRACT_ADDRESS, stakeAmount, 18);
-      
+      const approvalTxHash = await approveToken(tokenAddress, CONTRACT_ADDRESS, stakeAmount, 18);
+      if (!approvalTxHash) {
+        throw new Error('No se pudo aprobar USDT para el contrato');
+      }
+
       tx = await contract.createGameToken(gameId, amountWei);
     } else {
       const stakeWei = parseEther(stakeAmount);
@@ -144,12 +163,12 @@ export const createGameOnChain = async (
     console.error('Error creating game on chain:', error);
     if (error.data) console.error('Error data:', error.data);
     if (error.reason) console.error('Error reason:', error.reason);
-    
+
     // Check for user rejection explicitly
     if (error.code === 'ACTION_REJECTED') {
       throw new Error('Transacción rechazada por el usuario');
     }
-    
+
     if (error.message && error.message.includes('insufficient funds')) {
       throw new Error('Fondos insuficientes para esta transacción');
     }
@@ -252,6 +271,51 @@ export const withdrawBalance = async (currency: CurrencyType = 'BNB'): Promise<s
   } catch (error) {
     console.error('Error withdrawing balance:', error);
     return null;
+  }
+};
+
+export type SettleGameResult = {
+  status: 'settled' | 'skipped' | 'error';
+  txHash?: string;
+  reason?: string;
+};
+
+export const settleGameOnChain = async (
+  gameId: string,
+  winnerAddress: string | null,
+  isDraw = false
+): Promise<SettleGameResult> => {
+  try {
+    const contract = await getContract();
+    if (!contract) return { status: 'error', reason: 'Contract not available' };
+
+    const provider = new BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const signerAddress = await signer.getAddress();
+
+    const ownerAddress: string = await contract.owner();
+    if (ownerAddress.toLowerCase() !== signerAddress.toLowerCase()) {
+      return { status: 'skipped', reason: 'Solo la wallet del owner puede liquidar partidas on-chain' };
+    }
+
+    if (!isDraw && !winnerAddress) {
+      return { status: 'error', reason: 'Winner address is required for non-draw games' };
+    }
+
+    const tx = isDraw
+      ? await contract.finishGameDraw(gameId)
+      : await contract.finishGame(gameId, winnerAddress);
+
+    await tx.wait();
+    return { status: 'settled', txHash: tx.hash };
+  } catch (error: any) {
+    console.error('Error settling game on chain:', error);
+
+    if (error.code === 'ACTION_REJECTED') {
+      return { status: 'error', reason: 'Transacción rechazada por el usuario' };
+    }
+
+    return { status: 'error', reason: error?.reason || error?.message || 'Error al liquidar partida' };
   }
 };
 
