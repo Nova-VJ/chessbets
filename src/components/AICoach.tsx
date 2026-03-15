@@ -26,6 +26,7 @@ const AICoach = ({ profile }: AICoachProps) => {
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedCoachId, setSelectedCoachId] = useState('general');
+  const [wikiProfile, setWikiProfile] = useState<any>(null);
 
   const COACHES = [
     { id: 'general', name: 'Master IA', icon: Brain, color: 'text-indigo-400', desc: 'Análisis balanceado' },
