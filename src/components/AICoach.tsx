@@ -84,22 +84,7 @@ const AICoach = ({ profile }: AICoachProps) => {
   };
 
   const handleAnalyze = async () => {
-    if (!profile?.id) return;
-    setIsUploading(true); // reuse loading state
-    try {
-      const res = await fetch(`${API_URL}/analyze/${profile.id}`, { 
-        method: "POST",
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!res.ok) throw new Error("Analysis failed");
-      const data = await res.json();
-      toast.success(`Análisis completo: ${data.analyzed} partidas procesadas por Stockfish`);
-      fetchInsights();
-    } catch (err) {
-      toast.error("Error en el análisis de Stockfish");
-    } finally {
-      setIsUploading(false);
-    }
+    toast.info("El análisis automático estará disponible próximamente.");
   };
 
   const handleDownloadPDF = async () => {
