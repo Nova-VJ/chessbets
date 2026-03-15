@@ -45,7 +45,7 @@ interface LobbyGame {
 
 const Lobby = () => {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, isSyncing } = useAuth();
   const [games, setGames] = useState<LobbyGame[]>([]);
   const [activeHandshakeGame, setActiveHandshakeGame] = useState<any>(null);
   const [filterMode, setFilterMode] = useState<string>('all');
@@ -153,7 +153,11 @@ const Lobby = () => {
 
   const handleJoin = async (gameId: string) => {
     if (!user) {
-      toast.error('Debes iniciar sesión para jugar');
+      if (isSyncing) {
+        toast.info('Vinculando tu wallet... intenta de nuevo en unos segundos');
+      } else {
+        toast.error('Debes iniciar sesión para jugar');
+      }
       return;
     }
 

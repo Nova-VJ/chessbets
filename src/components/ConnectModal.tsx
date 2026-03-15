@@ -85,10 +85,10 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
         binance: 'Binance Wallet',
         trust: 'Trust Wallet',
       };
+      toast.info("Vinculando Perfil...", {
+        description: "Se está creando tu cuenta automáticamente vinculada a tu wallet."
+      });
       if (walletType === 'metamask') {
-        toast.info("Vinculando Perfil...", {
-          description: "Se está creando tu cuenta automáticamente vinculada a tu wallet."
-        });
         try {
           await switchToBSC(false);
           toast.success('MetaMask conectada a BNB Smart Chain', {

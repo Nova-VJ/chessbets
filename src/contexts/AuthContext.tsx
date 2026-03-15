@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useWallet } from '@/hooks/useWallet';
+import { useWalletContext } from '@/contexts/WalletContext';
 import { toast } from 'sonner';
 
 interface Profile {
@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncTrigger, setSyncTrigger] = useState(0);
-  const { address } = useWallet();
+  const { address, activeWalletType } = useWalletContext();
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -157,7 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // If already has a user, ensure wallet is linked
         if (user && profile && !profile.wallet_address) {
-          await linkWallet(address, 'metamask');
+          await linkWallet(address, activeWalletType || 'metamask');
           return;
         }
 
@@ -202,7 +202,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (signUpData.user) {
               const { error: linkError } = await supabase
                 .from('profiles')
-                .update({ wallet_address: address })
+                .update({ 
+                  wallet_address: address, 
+                  preferred_wallet: activeWalletType || 'metamask' 
+                })
                 .eq('id', signUpData.user.id);
               
               if (linkError) console.error("AUTH_DEBUG: Profile link error:", linkError);
