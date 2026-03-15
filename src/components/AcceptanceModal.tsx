@@ -61,18 +61,28 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
     setIsAccepting(true);
     
     // 1. Create the active game record
+    const creatorIsWhite = Math.random() > 0.5;
+    const whiteId = creatorIsWhite ? lobbyGame.creator_user_id : lobbyGame.joiner_user_id;
+    const blackId = creatorIsWhite ? lobbyGame.joiner_user_id : lobbyGame.creator_user_id;
+    const timeMsTotal = lobbyGame.time_control_minutes * 60 * 1000;
+
     const { data: game, error: gameError } = await (supabase
       .from('games') as any)
       .insert({
         lobby_id: lobbyGame.id,
+        creator_id: lobbyGame.creator_user_id,
+        opponent_id: lobbyGame.joiner_user_id,
         status: 'in_progress',
-        white_user_id: Math.random() > 0.5 ? lobbyGame.creator_user_id : lobbyGame.joiner_user_id,
-        black_user_id: Math.random() > 0.5 ? lobbyGame.joiner_user_id : lobbyGame.creator_user_id,
+        white_user_id: whiteId,
+        black_user_id: blackId,
         fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        stake_amount: lobbyGame.wager_amount || 0,
+        time_control: lobbyGame.time_control_minutes,
         time_control_minutes: lobbyGame.time_control_minutes,
         increment_seconds: lobbyGame.increment_seconds,
-        white_time_ms: lobbyGame.time_control_minutes * 60 * 1000,
-        black_time_ms: lobbyGame.time_control_minutes * 60 * 1000,
+        white_time_ms: timeMsTotal,
+        black_time_ms: timeMsTotal,
+        started_at: new Date().toISOString(),
       })
       .select()
       .single();

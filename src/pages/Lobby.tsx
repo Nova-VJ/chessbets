@@ -97,13 +97,26 @@ const Lobby = () => {
   const handleLobbyChange = (payload: any) => {
     const game = payload.new;
     if (game.status === 'pending_accept') {
+      // Always update with latest data (accept flags, etc.)
       setActiveHandshakeGame(game);
     } else if (game.status === 'in_progress') {
-      navigate(`/play/${game.id}`);
+      // The game row was created — find the game id from lobby_id
+      setActiveHandshakeGame(null);
+      findAndNavigateToGame(game.id);
     } else if (game.status === 'cancelled' || game.status === 'expired') {
       setActiveHandshakeGame(null);
-      // Also remove from visible list
       setGames(prev => prev.filter(g => g.id !== game.id));
+    }
+  };
+
+  const findAndNavigateToGame = async (lobbyId: string) => {
+    const { data } = await (supabase
+      .from('games') as any)
+      .select('id')
+      .eq('lobby_id', lobbyId)
+      .maybeSingle();
+    if (data) {
+      navigate(`/play/${data.id}`);
     }
   };
 
