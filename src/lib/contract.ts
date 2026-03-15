@@ -135,7 +135,7 @@ export const createGameOnChain = async (
     const contract = await getContract();
     if (!contract) throw new Error('Contract not available');
 
-    const provider = new BrowserProvider(window.ethereum);
+    const provider = new BrowserProvider(getActiveProvider());
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
 
