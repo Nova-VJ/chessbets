@@ -23,7 +23,7 @@ import ConnectModal from '@/components/ConnectModal';
 import DepositModal from '@/components/DepositModal';
 import WithdrawModal from '@/components/WithdrawModal';
 import RankIcon from '@/components/RankIcon';
-import { coachApiUrl } from '@/lib/coachApi';
+
 import {
   Dialog,
   DialogContent,
@@ -96,7 +96,7 @@ interface HistorySessionDetail extends HistorySessionSummary {
   messages: HistorySessionMessage[];
 }
 
-const API_URL = coachApiUrl('/api');
+
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -142,57 +142,172 @@ const Profile = () => {
   }, [user, profile, session?.access_token]);
 
   const loadProgress = async () => {
-    if (!profile || !session?.access_token) return;
-    try {
-      const res = await fetch(`${API_URL}/user/progress`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUserProgress(prev => ({ ...prev, ...data }));
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    if (!profile) return;
+    // Progress is now derived from local profile data
+    setUserProgress(prev => ({
+      ...prev,
+      level: Math.max(1, Math.floor((profile.games_played || 0) / 10) + 1),
+      xp: ((profile.games_played || 0) * 50) + ((profile.wins || 0) * 100),
+      rank: (profile.rating || 1200) >= 2000 ? 'Maestro' : (profile.rating || 1200) >= 1600 ? 'Avanzado' : (profile.rating || 1200) >= 1200 ? 'Intermedio' : 'Principiante',
+    }));
   };
 
   const loadHistory = async () => {
-    if (!profile || !session?.access_token) return;
+    if (!profile?.id) return;
     setIsLoadingHistory(true);
     try {
-      const headers = { 'Authorization': `Bearer ${session.access_token}` };
-      const [gamesRes, sessionsRes] = await Promise.all([
-        fetch(`${API_URL}/history`, { headers }),
-        fetch(`${API_URL}/history/sessions`, { headers }),
-      ]);
+      const COACH_NAMES: Record<string, string> = {
+        fischer: "Bobby Fischer", tal: "Mikhail Tal", capablanca: "Capablanca",
+        carlsen: "Magnus Carlsen", kasparov: "Garry Kasparov", general: "Coach IA",
+      };
 
-      if (gamesRes.ok) {
-        const data = await gamesRes.json();
-        setGameHistory(data.games || []);
+      // Load game history
+      const { data: games } = await supabase
+        .from('coach_game_history')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // Load conversation sessions (grouped by session_token)
+      const { data: convos } = await supabase
+        .from('coach_conversations')
+        .select('session_token, coach_id, content, role, interaction_mode, created_at')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      const sessions: HistorySessionSummary[] = [];
+
+      // Add game sessions
+      if (games) {
+        for (const g of games) {
+          sessions.push({
+            session_key: g.id,
+            session_token: g.session_token,
+            kind: 'game',
+            title: `Partida vs ${COACH_NAMES[g.coach_id] || g.coach_id}`,
+            coach_id: g.coach_id,
+            coach_name: COACH_NAMES[g.coach_id] || g.coach_id,
+            game_id: null,
+            date: g.created_at,
+            played_at: g.created_at,
+            result: g.result,
+            opening: g.opening,
+            time_control: g.time_control,
+            messages_count: 0,
+            interaction_modes: ['in_game'],
+            preview: g.review || `Resultado: ${g.result || '?'}`,
+            has_messages: false,
+          });
+        }
       }
 
-      if (sessionsRes.ok) {
-        const data = await sessionsRes.json();
-        setHistorySessions(data.sessions || []);
+      // Group conversations by session_token
+      if (convos) {
+        const sessionMap = new Map<string, typeof convos>();
+        for (const c of convos) {
+          const key = c.session_token;
+          if (!sessionMap.has(key)) sessionMap.set(key, []);
+          sessionMap.get(key)!.push(c);
+        }
+        for (const [token, msgs] of sessionMap) {
+          // Skip if already covered by a game session
+          if (sessions.some(s => s.session_token === token)) {
+            const existing = sessions.find(s => s.session_token === token);
+            if (existing) {
+              existing.messages_count = msgs.length;
+              existing.has_messages = true;
+            }
+            continue;
+          }
+          const first = msgs[msgs.length - 1]; // oldest
+          const coachId = first.coach_id;
+          sessions.push({
+            session_key: `conv-${token}`,
+            session_token: token,
+            kind: 'conversation',
+            title: `Consulta con ${COACH_NAMES[coachId] || coachId}`,
+            coach_id: coachId,
+            coach_name: COACH_NAMES[coachId] || coachId,
+            game_id: null,
+            date: first.created_at,
+            played_at: first.created_at,
+            result: null,
+            opening: null,
+            time_control: null,
+            messages_count: msgs.length,
+            interaction_modes: [...new Set(msgs.map(m => m.interaction_mode || 'coach_room'))],
+            preview: msgs.find(m => m.role === 'coach')?.content?.slice(0, 100) || 'Sin mensajes',
+            has_messages: true,
+          });
+        }
       }
+
+      // Sort by date
+      sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setHistorySessions(sessions);
+      setGameHistory(games?.map((g: any, i: number) => ({
+        id: i + 1,
+        date: new Date(g.created_at).toLocaleDateString('es'),
+        opponent: COACH_NAMES[g.coach_id] || g.coach_id,
+        opponent_id: g.coach_id,
+        result: g.result || '?',
+        rating: g.rating || 0,
+      })) || []);
     } catch (e) {
-      console.error(e);
+      console.error('Error loading history:', e);
     } finally {
       setIsLoadingHistory(false);
     }
   };
 
   const openHistorySession = async (sessionKey: string) => {
-    if (!session?.access_token) return;
+    if (!profile?.id) return;
     setIsHistoryDetailOpen(true);
     setIsLoadingHistoryDetail(true);
     try {
-      const res = await fetch(`${API_URL}/history/sessions/${encodeURIComponent(sessionKey)}`, {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
+      const summary = historySessions.find(s => s.session_key === sessionKey);
+      if (!summary) throw new Error('Session not found');
+
+      // Load messages for this session
+      let messages: HistorySessionMessage[] = [];
+      if (summary.session_token) {
+        const { data } = await supabase
+          .from('coach_conversations')
+          .select('id, role, content, interaction_mode, created_at, move_count')
+          .eq('user_id', profile.id)
+          .eq('session_token', summary.session_token)
+          .order('created_at', { ascending: true });
+        
+        if (data) {
+          messages = data.map((m: any, i: number) => ({
+            id: i,
+            role: m.role as 'user' | 'coach',
+            text: m.content,
+            interaction_mode: m.interaction_mode || 'coach_room',
+            timestamp: m.created_at,
+            move_count: m.move_count,
+          }));
+        }
+      }
+
+      // Load PGN if it's a game session
+      let pgn: string | null = null;
+      if (summary.kind === 'game') {
+        const { data: gameData } = await supabase
+          .from('coach_game_history')
+          .select('pgn')
+          .eq('id', sessionKey)
+          .maybeSingle();
+        pgn = gameData?.pgn || null;
+      }
+
+      setSelectedHistorySession({
+        ...summary,
+        pgn,
+        messages,
       });
-      if (!res.ok) throw new Error('No se pudo cargar el detalle');
-      const data = await res.json();
-      setSelectedHistorySession(data);
     } catch (error) {
       console.error(error);
       toast.error('No se pudo cargar ese historial');

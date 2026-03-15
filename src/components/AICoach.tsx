@@ -85,10 +85,31 @@ const AICoach = ({ profile }: AICoachProps) => {
     ensureCoachRoomSession(selectedCoachId);
   }, [selectedCoachId, session?.access_token]);
 
+  // Load past conversation history from DB when coach changes
   useEffect(() => {
-    // Chat history is now local-only (edge functions are stateless)
-    // No fetch needed
-  }, [selectedCoachId, session?.access_token]);
+    if (!profile?.id || !session?.access_token) return;
+    const loadConversationHistory = async () => {
+      try {
+        const query = supabase
+          .from('coach_conversations')
+          .select('role, content, created_at')
+          .eq('user_id', profile.id)
+          .order('created_at', { ascending: true })
+          .limit(30);
+        
+        if (selectedCoachId !== 'general') {
+          query.eq('coach_id', selectedCoachId);
+        }
+
+        const { data } = await query;
+        if (data && data.length > 0) {
+          const msgs = data.map((m: any) => ({ role: m.role as 'user' | 'coach', text: m.content }));
+          setChatHistories(prev => ({ ...prev, [selectedCoachId]: msgs }));
+        }
+      } catch (e) { console.error(e); }
+    };
+    loadConversationHistory();
+  }, [selectedCoachId, profile?.id, session?.access_token]);
 
   const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
     toast.info("La importación de PGN estará disponible próximamente.");
@@ -120,7 +141,8 @@ const AICoach = ({ profile }: AICoachProps) => {
         persona: selectedCoachId,
         interaction_mode: 'coach_room',
         message_kind: 'user',
-        session_token: sessionToken
+        session_token: sessionToken,
+        user_id: profile.id
       });
       if (!data.reply) throw new Error("Chat reply missing");
       setChatHistories(prev => ({

@@ -297,9 +297,27 @@ export default function HistoricalPlay() {
 
 
   const loadHistory = async () => {
-    // History was stored in the Python backend's SQLite DB
-    // Now returns empty - will be stored in Lovable Cloud DB in the future
-    setGameHistory([]);
+    if (!profile?.id) { setGameHistory([]); setIsLoadingHistory(false); return; }
+    setIsLoadingHistory(true);
+    try {
+      const { data } = await supabase
+        .from('coach_game_history')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (data) {
+        setGameHistory(data.map((g: any, i: number) => ({
+          id: i + 1,
+          date: new Date(g.created_at).toLocaleDateString('es'),
+          opponent: g.coach_id,
+          opponent_id: g.coach_id,
+          result: g.result || '?',
+          rating: g.rating || 0,
+          review: g.review,
+        })));
+      }
+    } catch (e) { console.error(e); }
     setIsLoadingHistory(false);
   };
 
@@ -311,6 +329,21 @@ export default function HistoricalPlay() {
     localStorage.removeItem('chess_game_state');
     localStorage.removeItem('chess_game_timers');
     const result = manualResult || (game.isCheckmate() ? (game.turn() === 'w' ? '0-1' : '1-0') : '1/2-1/2');
+
+    // Save game to coach_game_history
+    if (profile?.id && selectedCoachId) {
+      try {
+        await supabase.from('coach_game_history').insert({
+          user_id: profile.id,
+          coach_id: selectedCoachId,
+          session_token: completedSessionToken || undefined,
+          result,
+          user_color: userColor,
+          pgn: game.pgn() || null,
+          time_control: selectedTime,
+        });
+      } catch (e) { console.error("Game history save error:", e); }
+    }
     
     setIsEvaluating(true);
     setShowEvalModal(true);
@@ -377,7 +410,8 @@ export default function HistoricalPlay() {
         user_color: userColor,
         turn: game.turn(),
         game_id: null,
-        session_token: sessionToken
+        session_token: sessionToken,
+        user_id: profile?.id
       });
       
       if (!data.reply) return;
@@ -473,7 +507,8 @@ export default function HistoricalPlay() {
               user_color: userColor,
               turn: newGame.turn(),
               game_id: null,
-              session_token: currentSessionToken
+              session_token: currentSessionToken,
+              user_id: profile?.id
             }).then(chatData => {
               isFetchingCommentaryRef.current = false;
               if (chatData.reply) {

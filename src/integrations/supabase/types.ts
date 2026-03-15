@@ -14,6 +14,109 @@ export type Database = {
   }
   public: {
     Tables: {
+      coach_conversations: {
+        Row: {
+          coach_id: string
+          content: string
+          created_at: string
+          fen_snapshot: string | null
+          game_session_id: string | null
+          id: string
+          interaction_mode: string | null
+          move_count: number | null
+          role: string
+          session_token: string
+          user_id: string
+        }
+        Insert: {
+          coach_id: string
+          content: string
+          created_at?: string
+          fen_snapshot?: string | null
+          game_session_id?: string | null
+          id?: string
+          interaction_mode?: string | null
+          move_count?: number | null
+          role: string
+          session_token: string
+          user_id: string
+        }
+        Update: {
+          coach_id?: string
+          content?: string
+          created_at?: string
+          fen_snapshot?: string | null
+          game_session_id?: string | null
+          id?: string
+          interaction_mode?: string | null
+          move_count?: number | null
+          role?: string
+          session_token?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_conversations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_game_history: {
+        Row: {
+          coach_id: string
+          created_at: string
+          id: string
+          opening: string | null
+          pgn: string | null
+          rating: number | null
+          result: string | null
+          review: string | null
+          session_token: string | null
+          time_control: number | null
+          user_color: string | null
+          user_id: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          id?: string
+          opening?: string | null
+          pgn?: string | null
+          rating?: number | null
+          result?: string | null
+          review?: string | null
+          session_token?: string | null
+          time_control?: number | null
+          user_color?: string | null
+          user_id: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          id?: string
+          opening?: string | null
+          pgn?: string | null
+          rating?: number | null
+          result?: string | null
+          review?: string | null
+          session_token?: string | null
+          time_control?: number | null
+          user_color?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_game_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friendships: {
         Row: {
           created_at: string

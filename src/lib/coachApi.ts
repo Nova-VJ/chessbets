@@ -2,7 +2,6 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Invoke a chess edge function via Lovable Cloud.
- * Replaces the old fetchCoachApi that called the Python backend.
  */
 export async function invokeChessMove(fen: string, persona: string, timeControl: number) {
   const { data, error } = await supabase.functions.invoke('chess-move', {
@@ -25,6 +24,7 @@ export async function invokeChessChat(params: {
   message_kind?: string;
   game_id?: string | null;
   silent?: boolean;
+  user_id?: string;
 }) {
   const { data, error } = await supabase.functions.invoke('chess-chat', {
     body: params,
@@ -54,7 +54,6 @@ export function coachApiUrl(path: string) {
 }
 export async function ensureCoachApiAwake() {}
 export async function fetchCoachApi(path: string, init?: RequestInit, options?: any) {
-  // This should no longer be called - edge functions are used directly
   console.warn('fetchCoachApi is deprecated, use invoke* functions instead');
   throw new Error('Coach API has been migrated to edge functions');
 }
