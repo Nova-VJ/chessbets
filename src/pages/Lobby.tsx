@@ -28,13 +28,9 @@ interface LobbyGame {
   id: string;
   creator_user_id: string;
   creator: {
-    display_name: string;
-    avatar_url: string;
-    country_code: string;
-    rating_blitz: number;
-    rating_rapid: number;
-    rating_bullet: number;
-    games_played: number;
+    display_name: string | null;
+    rating: number | null;
+    games_played: number | null;
   };
   time_control_minutes: number;
   increment_seconds: number;
