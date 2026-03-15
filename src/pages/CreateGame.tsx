@@ -34,7 +34,7 @@ const PRESETS = [
 
 const CreateGame = () => {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, session, profile } = useAuth();
   const [selectedPreset, setSelectedPreset] = useState(PRESETS[1]);
   const [customMins, setCustomMins] = useState(5);
   const [customInc, setCustomInc] = useState(0);

@@ -150,12 +150,10 @@ const Matchmaking = () => {
   };
 
   const startSearching = async () => {
-    if (!user) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        toast.error('Debes iniciar sesión o conectar tu wallet');
-        return;
-      }
+    const effectiveUser = user ?? session?.user;
+    if (!effectiveUser) {
+      toast.error('Debes iniciar sesión o conectar tu wallet');
+      return;
     }
 
     const currentBalance = currency === 'USDT' ? (profile?.balance_usdt || 0) : (profile?.balance || 0);

@@ -78,6 +78,7 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
       return false;
     }
 
+    clearSignoutFlag();
     const success = await connect(walletType);
     if (success) {
       const names: Record<WalletType, string> = {

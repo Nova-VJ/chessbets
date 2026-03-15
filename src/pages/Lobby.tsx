@@ -45,7 +45,7 @@ interface LobbyGame {
 
 const Lobby = () => {
   const navigate = useNavigate();
-  const { user, profile, refreshProfile, isSyncing } = useAuth();
+  const { user, session, profile, refreshProfile, isSyncing } = useAuth();
   const [games, setGames] = useState<LobbyGame[]>([]);
   const [activeHandshakeGame, setActiveHandshakeGame] = useState<any>(null);
   const [filterMode, setFilterMode] = useState<string>('all');
