@@ -256,7 +256,7 @@ const CreateGame = () => {
                       <input 
                         type="number"
                         step={currency === 'USDT' ? '0.01' : '0.00001'}
-                        min={paymentMethod === 'web3' ? (currency === 'USDT' ? '1' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
+                        min={paymentMethod === 'web3' ? (currency === 'USDT' ? '0.1' : '0.00001') : (currency === 'USDT' ? '0.01' : '0.00001')}
                         max={paymentMethod === 'web3' ? (currency === 'USDT' ? '10000' : '100') : '10000'}
                         value={wager}
                         onChange={(e) => setWager(e.target.value)}
