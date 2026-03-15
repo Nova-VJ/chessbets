@@ -42,6 +42,7 @@ const CreateGame = () => {
   const [currency, setCurrency] = useState<CurrencyType>('BNB');
   const [paymentMethod, setPaymentMethod] = useState<'web3' | 'internal'>('web3');
   const [isCreating, setIsCreating] = useState(false);
+  const { isV2, supportsUSDT } = useContractVersion();
 
   const handleCreate = async () => {
     if (!user) {
