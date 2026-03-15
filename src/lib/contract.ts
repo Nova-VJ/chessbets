@@ -116,23 +116,39 @@ export const createGameOnChain = async (
   currency: CurrencyType = 'BNB'
 ): Promise<{ gameId: string; txHash: string } | null> => {
   try {
+    const amountNumber = Number(stakeAmount);
+    if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+      throw new Error('Monto inválido');
+    }
+
+    if (currency === 'USDT' && amountNumber < 1) {
+      throw new Error('La apuesta mínima en USDT on-chain es 1 USDT');
+    }
+
+    if (currency === 'USDT' && amountNumber > 10000) {
+      throw new Error('La apuesta máxima en USDT on-chain es 10000 USDT');
+    }
+
     const contract = await getContract();
     if (!contract) throw new Error('Contract not available');
 
     const provider = new BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
-    
+
     const gameId = generateGameId(address, Date.now());
 
     let tx;
     if (currency === 'USDT') {
       const tokenAddress = getTokenAddress(false);
       const amountWei = parseUnits(stakeAmount, 18);
-      
+
       // Approve first
-      await approveToken(tokenAddress, CONTRACT_ADDRESS, stakeAmount, 18);
-      
+      const approvalTxHash = await approveToken(tokenAddress, CONTRACT_ADDRESS, stakeAmount, 18);
+      if (!approvalTxHash) {
+        throw new Error('No se pudo aprobar USDT para el contrato');
+      }
+
       tx = await contract.createGameToken(gameId, amountWei);
     } else {
       const stakeWei = parseEther(stakeAmount);
@@ -147,12 +163,12 @@ export const createGameOnChain = async (
     console.error('Error creating game on chain:', error);
     if (error.data) console.error('Error data:', error.data);
     if (error.reason) console.error('Error reason:', error.reason);
-    
+
     // Check for user rejection explicitly
     if (error.code === 'ACTION_REJECTED') {
       throw new Error('Transacción rechazada por el usuario');
     }
-    
+
     if (error.message && error.message.includes('insufficient funds')) {
       throw new Error('Fondos insuficientes para esta transacción');
     }
