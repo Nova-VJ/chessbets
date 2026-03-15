@@ -334,26 +334,13 @@ const Lobby = () => {
                       <div className="p-5 flex flex-col h-full justify-between gap-4">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
-                            <div className="relative">
-                              <div className="w-12 h-12 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700">
-                                {game.creator.avatar_url ? (
-                                  <img src={game.creator.avatar_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <Users className="w-6 h-6 text-zinc-600" />
-                                )}
-                              </div>
-                              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center overflow-hidden">
-                                {game.creator.country_code ? (
-                                  <img src={`https://flagcdn.com/w20/${game.creator.country_code.toLowerCase()}.png`} className="w-3 h-3 scale-150" alt="" />
-                                ) : (
-                                  <Globe className="w-2 h-2 text-zinc-500" />
-                                )}
-                              </div>
+                            <div className="w-12 h-12 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden border border-zinc-700">
+                              <Users className="w-6 h-6 text-zinc-600" />
                             </div>
                             <div>
                               <div className="text-white font-bold text-sm flex items-center gap-1 group-hover:text-primary transition-colors">
-                                {game.creator.display_name}
-                                <span className="text-[10px] text-zinc-500 font-mono">({game.creator.rating_blitz})</span>
+                                {game.creator.display_name || 'Jugador'}
+                                <span className="text-[10px] text-zinc-500 font-mono">({game.creator.rating ?? 1200})</span>
                               </div>
                               <div className="text-[10px] text-zinc-500 uppercase tracking-tighter">
                                 {game.creator.games_played} partidas jugadas
