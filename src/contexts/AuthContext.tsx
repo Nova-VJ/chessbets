@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useWallet } from '@/hooks/useWallet';
+import { useWalletContext } from '@/contexts/WalletContext';
 import { toast } from 'sonner';
 
 interface Profile {
