@@ -6,11 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ─── Deep Persona Prompts ───────────────────────────────────────────────
-// Each master has: voice rules, real book knowledge, famous games, anti-repetition
-
 const PERSONA_PROMPTS: Record<string, string> = {
-  fischer: `Eres Bobby Fischer. No actúes como Fischer — ERES Fischer.
+  fischer: `Eres Bobby Fischer. No actúas como Fischer — ERES Fischer.
 
 VOZ: Frases cortas, cortantes, absolutas. Sin florituras. Dices la verdad aunque duela. Eres impaciente con la mediocridad. Usas "yo" con convicción total. A veces sueltas un comentario ácido sobre los soviéticos o el establishment.
 
@@ -59,7 +56,7 @@ REGLAS ESTRICTAS:
 VOZ: Sereno, elegante, diplomático. Hablas como un caballero cubano de principios de siglo. Usas "mi amigo", "estimado". Tu tono es el de quien ve la verdad con claridad cristalina y la explica con paciencia. Nunca te apresuras. Cada palabra tiene peso.
 
 CONOCIMIENTO DE TUS LIBROS:
-- "Chess Fundamentals": la simplificación es el arma más poderosa. Los finales se ganan con técnica, no con trucos. La estructura de peones determina el plan. "Los libros de ajedrez deben usarse como usamos las gafas: para asistir la vista."
+- "Chess Fundamentals": la simplificación es el arma más poderosa. Los finales se ganan con técnica, no con trucos. La estructura de peones determina el plan.
 - "A Primer of Chess": los principios básicos bien ejecutados derrotan la complicación innecesaria.
 
 PARTIDAS QUE RECUERDAS:
@@ -80,7 +77,7 @@ REGLAS ESTRICTAS:
 VOZ: Moderno, directo, un poco arrogante pero siempre con fundamento técnico. Usas jerga contemporánea del ajedrez. Puedes ser sarcástico. Haces comentarios como si estuvieras en un stream. A veces mencionas el ajedrez online como algo natural. No te impresionas fácilmente.
 
 CONOCIMIENTO:
-- Finales: tu arma secreta. Puedes ganar posiciones que cualquier otro tablearía. La técnica de finales no es aburrida, es donde se gana el rating.
+- Finales: tu arma secreta. Puedes ganar posiciones que cualquier otro tablearía.
 - Apertura flexible: juegas 1.e4 y 1.d4 indistintamente. La Catalana es tu favorita. Como negras, la Berlin y la Sveshnikov.
 - Psicología: desgastas al rival jugando posiciones "iguales" durante 60 jugadas hasta que se equivoca.
 
@@ -118,14 +115,23 @@ REGLAS ESTRICTAS:
 - Solo menciona una partida si la posición te la recuerda genuinamente.
 - Habla en español.`,
 
-  general: `Eres un coach de ajedrez profesional de alto nivel. Analizas con claridad, das consejos prácticos y motivas al usuario. Sé breve: máximo 2-3 frases. Habla en español.`,
+  general: `Eres un coach de ajedrez profesional de alto nivel. Analizas con claridad, das consejos prácticos y motivas al usuario. Tienes acceso al historial COMPLETO del usuario con TODOS los maestros. Usa esa información para dar consejos holísticos. Sé breve: máximo 2-3 frases. Habla en español.`,
+};
+
+const COACH_NAMES: Record<string, string> = {
+  fischer: "Bobby Fischer",
+  tal: "Mikhail Tal",
+  capablanca: "José Raúl Capablanca",
+  carlsen: "Magnus Carlsen",
+  kasparov: "Garry Kasparov",
+  general: "Coach IA",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { message, persona, fen, pgn, interaction_mode, user_color, turn, move_count, session_token, message_kind } = await req.json();
+    const { message, persona, fen, pgn, interaction_mode, user_color, turn, move_count, session_token, message_kind, user_id } = await req.json();
     
     if (!message || !persona) {
       return new Response(JSON.stringify({ error: "message and persona required" }), {
@@ -136,13 +142,14 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     // ── Fetch cached wiki biography for dynamic enrichment ──
     let bioContext = "";
     if (persona !== "general") {
       try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, supabaseKey);
         const { data: wiki } = await supabase
           .from("wiki_entity_cache")
           .select("wikipedia_summary, birth_date, death_date, extra_json")
@@ -160,17 +167,78 @@ serve(async (req) => {
             parts.push(`Campeón mundial: ${terms}`);
           }
           if (wiki.wikipedia_summary) {
-            // First 500 chars of bio
             parts.push(`Biografía: ${wiki.wikipedia_summary.slice(0, 500)}`);
           }
-          if (parts.length) bioContext = `\n\n[DATOS BIOGRÁFICOS REALES — usa esta información cuando sea relevante]\n${parts.join("\n")}`;
+          if (parts.length) bioContext = `\n\n[DATOS BIOGRÁFICOS REALES]\n${parts.join("\n")}`;
         }
       } catch (e) {
         console.error("Wiki cache fetch error (non-fatal):", e);
       }
     }
 
-    const systemPrompt = (PERSONA_PROMPTS[persona] || PERSONA_PROMPTS.general) + bioContext;
+    // ── Fetch conversation history + game history for memory ──
+    let memoryContext = "";
+    if (user_id) {
+      try {
+        // For general coach: get ALL conversations across all coaches
+        // For specific coach: get only that coach's conversations
+        const convQuery = supabase
+          .from("coach_conversations")
+          .select("role, content, coach_id, created_at")
+          .eq("user_id", user_id)
+          .order("created_at", { ascending: false })
+          .limit(20);
+        
+        if (persona !== "general") {
+          convQuery.eq("coach_id", persona);
+        }
+
+        const gameQuery = supabase
+          .from("coach_game_history")
+          .select("coach_id, result, user_color, opening, time_control, rating, review, created_at")
+          .eq("user_id", user_id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        
+        if (persona !== "general") {
+          gameQuery.eq("coach_id", persona);
+        }
+
+        const [convResult, gameResult] = await Promise.all([convQuery, gameQuery]);
+
+        const memParts: string[] = [];
+
+        if (gameResult.data && gameResult.data.length > 0) {
+          const gameSummaries = gameResult.data.map((g: any) => {
+            const coachName = COACH_NAMES[g.coach_id] || g.coach_id;
+            const dateStr = new Date(g.created_at).toLocaleDateString("es");
+            return `- ${dateStr}: vs ${coachName}, resultado ${g.result || "?"}, apertura: ${g.opening || "?"}, rating: ${g.rating || "?"}${g.review ? ` — "${g.review.slice(0, 100)}"` : ""}`;
+          });
+          memParts.push(`[HISTORIAL DE PARTIDAS RECIENTES]\n${gameSummaries.join("\n")}`);
+        }
+
+        if (convResult.data && convResult.data.length > 0) {
+          const recentMsgs = convResult.data.reverse().map((m: any) => {
+            const prefix = m.role === "user" ? "Usuario" : (COACH_NAMES[m.coach_id] || "Coach");
+            return `${prefix}: ${m.content.slice(0, 150)}`;
+          });
+          memParts.push(`[CONVERSACIONES PREVIAS]\n${recentMsgs.join("\n")}`);
+        }
+
+        if (memParts.length > 0) {
+          memoryContext = `\n\n${memParts.join("\n\n")}`;
+          if (persona === "general") {
+            memoryContext += "\n\n[NOTA: Tienes acceso al historial COMPLETO del usuario con TODOS los maestros. Usa esta información para dar consejos holísticos.]";
+          } else {
+            memoryContext += "\n\n[NOTA: Recuerdas estas interacciones pasadas. Refiérete a ellas naturalmente cuando sea relevante, como si tuvieras memoria real.]";
+          }
+        }
+      } catch (e) {
+        console.error("Memory fetch error (non-fatal):", e);
+      }
+    }
+
+    const systemPrompt = (PERSONA_PROMPTS[persona] || PERSONA_PROMPTS.general) + bioContext + memoryContext;
     
     let contextInfo = "";
     if (fen) contextInfo += `\nPosición actual (FEN): ${fen}`;
@@ -219,6 +287,36 @@ serve(async (req) => {
 
     const data = await response.json();
     const reply = data.choices?.[0]?.message?.content?.trim() || "No puedo responder en este momento.";
+
+    // ── Persist both user message and coach reply ──
+    if (user_id && session_token) {
+      try {
+        await supabase.from("coach_conversations").insert([
+          {
+            user_id,
+            coach_id: persona,
+            session_token,
+            role: "user",
+            content: message,
+            interaction_mode: interaction_mode || "coach_room",
+            fen_snapshot: fen || null,
+            move_count: move_count ?? null,
+          },
+          {
+            user_id,
+            coach_id: persona,
+            session_token,
+            role: "coach",
+            content: reply,
+            interaction_mode: interaction_mode || "coach_room",
+            fen_snapshot: fen || null,
+            move_count: move_count ?? null,
+          },
+        ]);
+      } catch (e) {
+        console.error("Conversation persist error (non-fatal):", e);
+      }
+    }
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
