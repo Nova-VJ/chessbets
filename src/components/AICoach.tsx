@@ -48,7 +48,6 @@ const AICoach = ({ profile }: AICoachProps) => {
       .then(({ data }) => { if (data && !data.error) setWikiProfile(data); })
       .catch(() => {});
   }, [selectedCoachId]);
-  const currentChatHistory = chatHistories[selectedCoachId] || [];
 
   const ensureCoachRoomSession = (coachId: string) => {
     const existing = chatSessionTokens[coachId];
