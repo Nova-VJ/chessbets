@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import ContractVersionBanner from '@/components/ContractVersionBanner';
+import { useContractVersion } from '@/hooks/useContractVersion';
 import { 
   Zap, 
   Timer, 
