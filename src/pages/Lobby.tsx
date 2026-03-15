@@ -155,10 +155,16 @@ const Lobby = () => {
     if (!user) {
       if (isSyncing) {
         toast.info('Vinculando tu wallet... intenta de nuevo en unos segundos');
-      } else {
-        toast.error('Debes iniciar sesión para jugar');
+        return;
       }
-      return;
+      // Wallet connected but shadow login hasn't fired yet — retry once
+      await refreshProfile();
+      // Re-check after refresh attempt
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        toast.error('Debes iniciar sesión o conectar tu wallet para jugar');
+        return;
+      }
     }
 
     const { error } = await (supabase
