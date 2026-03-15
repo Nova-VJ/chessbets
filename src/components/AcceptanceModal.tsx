@@ -127,8 +127,8 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
 
     const update = isCreator ? { accept_creator: true } : { accept_joiner: true };
     
-    const { error } = await supabase
-      .from('lobby_games')
+    const { error } = await (supabase
+      .from('lobby_games') as any)
       .update(update)
       .eq('id', lobbyGame.id);
 
