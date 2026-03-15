@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Crown, Target, Shield, Zap, ChevronRight, Activity, TrendingUp, AlertTriangle, Lightbulb, UploadCloud, Loader2, MessageSquare, Send, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { coachApiUrl } from '@/lib/coachApi';
+import { invokeChessChat } from '@/lib/coachApi';
 
 interface AICoachProps {
   profile: any;
 }
 
-const API_URL = coachApiUrl('/api');
+// Edge functions are used directly - no API_URL needed
 const generateCoachRoomSessionToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const AICoach = ({ profile }: AICoachProps) => {
@@ -47,24 +47,22 @@ const AICoach = ({ profile }: AICoachProps) => {
   };
 
   const fetchInsights = async () => {
-    if (!profile?.id || !session?.access_token) {
-      setIsLoading(false);
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const res = await fetch(`${API_URL}/insights`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!res.ok) throw new Error("Error fetching insights");
-      const data = await res.json();
-      setInsights(data);
-    } catch (err) {
-      console.error(err);
-      setInsights(null);
-    } finally {
-      setIsLoading(false);
-    }
+    // Insights were from the Python backend - now return default state
+    setInsights({
+      state: 'active',
+      games_analyzed: 0,
+      books_ingested: 0,
+      overview: {
+        elo_trend: '+0',
+        estimated_title: 'Principiante',
+        verdict: 'Usa el chat con los maestros para recibir análisis personalizados de tus partidas.'
+      },
+      openings: { favorite: 'N/A', worst: 'N/A', tip: 'Juega más partidas para obtener datos.' },
+      tactics: { solved: 0, accuracy: 0, tip: 'Practica tácticas regularmente.' },
+      endgame: { accuracy: 0, tip: 'Los finales son clave para mejorar.' },
+      mental: { tilt_risk: 'Bajo', tip: 'Mantén la calma en posiciones complicadas.' }
+    });
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -77,94 +75,20 @@ const AICoach = ({ profile }: AICoachProps) => {
   }, [selectedCoachId, session?.access_token]);
 
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      if (!session?.access_token) return;
-      try {
-        const params = new URLSearchParams({ interaction_mode: 'coach_room' });
-        const res = await fetch(`${API_URL}/chat/history/${selectedCoachId}?${params.toString()}`, {
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
-        if (!res.ok) throw new Error("History fetch failed");
-        const data = await res.json();
-        setChatHistories(prev => ({
-          ...prev,
-          [selectedCoachId]: data.map((msg: any) => ({
-            role: msg.role === 'coach' ? 'coach' : 'user',
-            text: msg.text
-          }))
-        }));
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    void fetchChatHistory();
+    // Chat history is now local-only (edge functions are stateless)
+    // No fetch needed
   }, [selectedCoachId, session?.access_token]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !profile?.id) return;
-    
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    try {
-      const res = await fetch(`${API_URL}/upload-pgn/${profile.id}`, {
-        method: "POST",
-        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        body: formData
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      toast.success("Partidas importadas correctamente al motor AI");
-      fetchInsights();
-    } catch (err) {
-      toast.error("Error importando PGN local");
-    } finally {
-      setIsUploading(false);
-    }
+  const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
+    toast.info("La importación de PGN estará disponible próximamente.");
   };
 
   const handleAnalyze = async () => {
-    if (!profile?.id) return;
-    setIsUploading(true); // reuse loading state
-    try {
-      const res = await fetch(`${API_URL}/analyze/${profile.id}`, { 
-        method: "POST",
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!res.ok) throw new Error("Analysis failed");
-      const data = await res.json();
-      toast.success(`Análisis completo: ${data.analyzed} partidas procesadas por Stockfish`);
-      fetchInsights();
-    } catch (err) {
-      toast.error("Error en el análisis de Stockfish");
-    } finally {
-      setIsUploading(false);
-    }
+    toast.info("El análisis automático estará disponible próximamente.");
   };
 
   const handleDownloadPDF = async () => {
-    if (!profile?.id) return;
-    try {
-      const res = await fetch(`${API_URL}/report/${profile.id}`, {
-        headers: { 'Authorization': `Bearer ${session?.access_token}` }
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Error generando PDF");
-      }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `IA_Coach_Pro_Report.pdf`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-      toast.success("Informe PDF descargado");
-    } catch (err: any) {
-      toast.error(err.message || "Error descargando informe");
-    }
+    toast.info("La descarga de informes PDF estará disponible próximamente.");
   };
 
   const handleSendMessage = async () => {
@@ -180,22 +104,13 @@ const AICoach = ({ profile }: AICoachProps) => {
     setIsSendingChat(true);
 
     try {
-      const res = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          message: userMsg,
-          persona: selectedCoachId,
-          interaction_mode: 'coach_room',
-          message_kind: 'user',
-          session_token: sessionToken
-        })
+      const data = await invokeChessChat({
+        message: userMsg,
+        persona: selectedCoachId,
+        interaction_mode: 'coach_room',
+        message_kind: 'user',
+        session_token: sessionToken
       });
-      if (!res.ok) throw new Error("Chat failed");
-      const data = await res.json();
       if (!data.reply) throw new Error("Chat reply missing");
       setChatHistories(prev => ({
         ...prev,

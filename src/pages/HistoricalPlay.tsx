@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/hooks/useWallet';
-import { ensureCoachApiAwake, fetchCoachApi } from '@/lib/coachApi';
+import { invokeChessMove, invokeChessChat, invokeChessEvaluate } from '@/lib/coachApi';
 import ConnectModal from '@/components/ConnectModal';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
@@ -173,31 +173,11 @@ export default function HistoricalPlay() {
   const currentChatHistory = selectedCoachId ? (chatHistories[selectedCoachId] || []) : [];
 
   const fetchCoachHistory = async (
-    sessionToken: string | null = currentSessionToken,
-    interactionMode: 'pre_game' | 'in_game' | 'post_game' = isPlaying ? 'in_game' : 'pre_game'
+    _sessionToken: string | null = currentSessionToken,
+    _interactionMode: 'pre_game' | 'in_game' | 'post_game' = isPlaying ? 'in_game' : 'pre_game'
   ) => {
-    if (!profile?.id || !selectedCoachId || !session?.access_token || !sessionToken) return;
-    try {
-      const params = new URLSearchParams({
-        session_token: sessionToken,
-        interaction_mode: interactionMode
-      });
-      const res = await fetchCoachApi(`/api/chat/history/${selectedCoachId}?${params.toString()}`, {
-        headers: { 
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      }, { retries: 2 });
-      if (res.ok) {
-        const data = await res.json();
-        const history = data.map((m: any) => ({
-          role: (m.role === 'model' || m.role === 'coach') ? 'coach' : 'user',
-          text: m.text
-        }));
-        setChatHistories(prev => ({ ...prev, [selectedCoachId]: history }));
-      }
-    } catch (e) {
-      console.error("Failed to fetch coach history:", e);
-    }
+    // Chat history is now local-only (edge functions are stateless)
+    // No-op: history is kept in React state per session
   };
 
   useEffect(() => {
@@ -305,18 +285,10 @@ export default function HistoricalPlay() {
 
 
   const loadHistory = async () => {
-    if (!profile || !session) return;
-    setIsLoadingHistory(true);
-    try {
-      const res = await fetchCoachApi('/api/history', {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
-      }, { retries: 2 });
-      if (res.ok) {
-        const data = await res.json();
-        setGameHistory(data.games || []);
-      }
-    } catch (e) { console.error(e); }
-    finally { setIsLoadingHistory(false); }
+    // History was stored in the Python backend's SQLite DB
+    // Now returns empty - will be stored in Lovable Cloud DB in the future
+    setGameHistory([]);
+    setIsLoadingHistory(false);
   };
 
   const handleGameOver = async (manualResult?: string) => {
@@ -332,38 +304,27 @@ export default function HistoricalPlay() {
     setShowEvalModal(true);
     
     try {
-      const res = await fetchCoachApi('/api/game/evaluate', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          user_id: profile?.id,
-          opponent_id: selectedCoachId,
-          pgn: game.pgn(),
-          result: result,
-          time_control: selectedTime,
-          session_token: completedSessionToken
-        })
-      }, { retries: 2 });
-      if (res.ok) {
-        const data = await res.json();
-        setEvaluation(data);
-        
-        if (data.xp_earned > 0) {
-          triggerNotification({
-            type: 'xp',
-            value: data.xp_earned || 250,
-            label: 'Duelo Finalizado'
-          });
-          triggerNotification({
-            type: 'mission',
-            value: 'Lección Aprendida',
-            label: `Vs ${activeCoach?.name}`
-          });
-        }
-        loadHistory();
+      const data = await invokeChessEvaluate({
+        user_id: profile?.id,
+        opponent_id: selectedCoachId,
+        pgn: game.pgn(),
+        result: result,
+        time_control: selectedTime,
+        session_token: completedSessionToken
+      });
+      setEvaluation(data);
+      
+      if (data.xp_earned > 0) {
+        triggerNotification({
+          type: 'xp',
+          value: data.xp_earned || 250,
+          label: 'Duelo Finalizado'
+        });
+        triggerNotification({
+          type: 'mission',
+          value: 'Lección Aprendida',
+          label: `Vs ${activeCoach?.name}`
+        });
       }
     } catch (e) {
       toast.error("Error al obtener la evaluación del maestro.");
@@ -393,41 +354,26 @@ export default function HistoricalPlay() {
     setShowEmojiPicker(false);
 
     try {
-      const response = await fetchCoachApi('/api/chat', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ 
-          message: userMsg, 
-          persona: selectedCoachId,
-          interaction_mode: interactionMode,
-          message_kind: 'user',
-          fen: game.fen(),
-          pgn: game.pgn(),
-          move_count: game.history().length,
-          user_color: userColor,
-          turn: game.turn(),
-          game_id: null,
-          session_token: sessionToken
-        }),
-      }, { retries: 2 });
-      if (!response.ok) throw new Error("Chat failed");
-      const data = await response.json();
+      const data = await invokeChessChat({ 
+        message: userMsg, 
+        persona: selectedCoachId,
+        interaction_mode: interactionMode,
+        message_kind: 'user',
+        fen: game.fen(),
+        pgn: game.pgn(),
+        move_count: game.history().length,
+        user_color: userColor,
+        turn: game.turn(),
+        game_id: null,
+        session_token: sessionToken
+      });
       
       if (!data.reply) return;
 
       setChatHistories(prev => {
         const history = prev[selectedCoachId] || [];
         const lastMsg = history.length > 0 ? history[history.length - 1].text : null;
-        
-        // Skip if same as last message (Frontend Duplication Guard)
-        if (data.reply === lastMsg) {
-          console.log("DEBUG: Frontend blocked duplicate message.");
-          return prev;
-        }
-
+        if (data.reply === lastMsg) return prev;
         return {
           ...prev,
           [selectedCoachId]: [...history, { role: 'coach', text: data.reply }]
@@ -474,19 +420,7 @@ export default function HistoricalPlay() {
     
     setTimeout(async () => {
       try {
-        const response = await fetchCoachApi('/api/play/move', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
-          },
-          body: JSON.stringify({
-            fen: currentGame.fen(),
-            persona: activeCoach.id,
-            time_control: selectedTime
-          })
-        }, { retries: 2, retryDelayMs: 5000 });
-        const data = await response.json();
+        const data = await invokeChessMove(currentGame.fen(), activeCoach.id, selectedTime);
         if (data.move) {
           const newGame = new Chess();
           if (sourcePgn) {
@@ -515,38 +449,26 @@ export default function HistoricalPlay() {
 
           if (movesSinceLast >= 10 && !isFetchingCommentaryRef.current) {
             isFetchingCommentaryRef.current = true;
-            fetchCoachApi('/api/chat', {
-              method: "POST",
-              headers: { 
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${session?.access_token}`
-              },
-              body: JSON.stringify({ 
-                message: "Comenta brevemente la posicion actual.", 
-                persona: activeCoach.id,
-                interaction_mode: 'in_game',
-                message_kind: 'auto_commentary',
-                fen: newFen,
-                pgn: newGame.pgn(),
-                move_count: currentMoveCount,
-                silent: true,
-                user_color: userColor,
-                turn: newGame.turn(),
-                game_id: null,
-                session_token: currentSessionToken
-              })
-            }, { retries: 2 }).then(r => r.json()).then(chatData => {
+            invokeChessChat({ 
+              message: "Comenta brevemente la posicion actual.", 
+              persona: activeCoach.id,
+              interaction_mode: 'in_game',
+              message_kind: 'auto_commentary',
+              fen: newFen,
+              pgn: newGame.pgn(),
+              move_count: currentMoveCount,
+              silent: true,
+              user_color: userColor,
+              turn: newGame.turn(),
+              game_id: null,
+              session_token: currentSessionToken
+            }).then(chatData => {
               isFetchingCommentaryRef.current = false;
               if (chatData.reply) {
                 setChatHistories(prev => {
                   const history = prev[activeCoach.id] || [];
                   const lastMsg = history.length > 0 ? history[history.length - 1].text : null;
-                  
-                  if (chatData.reply === lastMsg) {
-                    console.log("DEBUG: Frontend blocked duplicate SILENT message.");
-                    return prev;
-                  }
-
+                  if (chatData.reply === lastMsg) return prev;
                   return {
                     ...prev,
                     [activeCoach.id]: [...history, { role: 'coach', text: chatData.reply }]
@@ -561,7 +483,7 @@ export default function HistoricalPlay() {
         }
       } catch (err) {
         console.error(err);
-        toast.error('Motor desconectado.');
+        toast.error('Error al obtener jugada del maestro.');
       } finally {
         if (pendingEngineFenRef.current === currentFen) pendingEngineFenRef.current = null;
         setIsEngineThinking(false);
@@ -614,19 +536,8 @@ export default function HistoricalPlay() {
       return toast.error('Vinculando tu wallet con el servidor... espera un momento.');
     }
 
-    const wakeToast = toast.loading('Despertando motor del maestro...');
-    setIsWarmingEngine(true);
-
-    try {
-      await ensureCoachApiAwake({ attempts: 8, delayMs: 5000 });
-      toast.success('Motor listo.', { id: wakeToast });
-    } catch (error) {
-      console.error(error);
-      toast.error('El motor tardó demasiado en responder. Intenta de nuevo en unos segundos.', { id: wakeToast });
-      return;
-    } finally {
-      setIsWarmingEngine(false);
-    }
+    // Edge functions are always available - no wake needed
+    toast.success('Motor listo.');
     
     const newGame = new Chess();
     setGame(newGame);

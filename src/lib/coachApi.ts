@@ -1,102 +1,60 @@
-const rawCoachApiBaseUrl = import.meta.env.VITE_COACH_API_URL?.trim() ?? '';
+import { supabase } from '@/integrations/supabase/client';
 
-const normalizedCoachApiBaseUrl = rawCoachApiBaseUrl.replace(/\/+$/, '');
+/**
+ * Invoke a chess edge function via Lovable Cloud.
+ * Replaces the old fetchCoachApi that called the Python backend.
+ */
+export async function invokeChessMove(fen: string, persona: string, timeControl: number) {
+  const { data, error } = await supabase.functions.invoke('chess-move', {
+    body: { fen, persona, time_control: timeControl },
+  });
+  if (error) throw error;
+  return data as { move: string; san: string };
+}
 
-let wakePromise: Promise<void> | null = null;
+export async function invokeChessChat(params: {
+  message: string;
+  persona: string;
+  fen?: string;
+  pgn?: string;
+  interaction_mode?: string;
+  user_color?: string;
+  turn?: string;
+  move_count?: number;
+  session_token?: string;
+  message_kind?: string;
+  game_id?: string | null;
+  silent?: boolean;
+}) {
+  const { data, error } = await supabase.functions.invoke('chess-chat', {
+    body: params,
+  });
+  if (error) throw error;
+  return data as { reply: string };
+}
 
-type WakeOptions = {
-  attempts?: number;
-  delayMs?: number;
-};
+export async function invokeChessEvaluate(params: {
+  pgn: string;
+  result: string;
+  opponent_id?: string;
+  time_control?: number;
+  user_id?: string;
+  session_token?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke('chess-evaluate', {
+    body: params,
+  });
+  if (error) throw error;
+  return data;
+}
 
-type FetchCoachApiOptions = {
-  retries?: number;
-  retryDelayMs?: number;
-};
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const isRetriableStatus = (status: number) => status === 502 || status === 503 || status === 504;
-
+// Legacy exports kept for compatibility (no-op)
 export function coachApiUrl(path: string) {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return normalizedCoachApiBaseUrl
-    ? `${normalizedCoachApiBaseUrl}${normalizedPath}`
-    : normalizedPath;
+  return path;
 }
-
-export async function ensureCoachApiAwake(options: WakeOptions = {}) {
-  if (!normalizedCoachApiBaseUrl) return;
-
-  const attempts = options.attempts ?? 6;
-  const delayMs = options.delayMs ?? 5000;
-
-  if (!wakePromise) {
-    wakePromise = (async () => {
-      let lastError: unknown;
-
-      for (let attempt = 0; attempt < attempts; attempt += 1) {
-        try {
-          const response = await fetch(coachApiUrl('/api/health'), {
-            method: 'GET',
-            cache: 'no-store',
-          });
-
-          if (response.ok) {
-            return;
-          }
-
-          lastError = new Error(`Coach API health returned ${response.status}`);
-        } catch (error) {
-          lastError = error;
-        }
-
-        if (attempt < attempts - 1) {
-          await sleep(delayMs);
-        }
-      }
-
-      throw lastError ?? new Error('Coach API did not wake up in time.');
-    })();
-  }
-
-  try {
-    await wakePromise;
-  } finally {
-    wakePromise = null;
-  }
-}
-
-export async function fetchCoachApi(
-  path: string,
-  init?: RequestInit,
-  options: FetchCoachApiOptions = {},
-) {
-  const retries = options.retries ?? 1;
-  const retryDelayMs = options.retryDelayMs ?? 4000;
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    try {
-      const response = await fetch(coachApiUrl(path), init);
-
-      if (attempt < retries && isRetriableStatus(response.status)) {
-        lastError = new Error(`Coach API returned ${response.status}`);
-        await ensureCoachApiAwake({ attempts: 4, delayMs: retryDelayMs });
-        continue;
-      }
-
-      return response;
-    } catch (error) {
-      lastError = error;
-
-      if (attempt === retries) {
-        throw error;
-      }
-
-      await ensureCoachApiAwake({ attempts: 4, delayMs: retryDelayMs });
-    }
-  }
-
-  throw lastError ?? new Error('Coach API request failed.');
+export async function ensureCoachApiAwake() {}
+export async function fetchCoachApi(path: string, init?: RequestInit, options?: any) {
+  // This should no longer be called - edge functions are used directly
+  console.warn('fetchCoachApi is deprecated, use invoke* functions instead');
+  throw new Error('Coach API has been migrated to edge functions');
 }
