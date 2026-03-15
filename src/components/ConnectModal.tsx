@@ -107,86 +107,30 @@ const ConnectModal = ({ isOpen, onClose, initialMode = 'options', initialEmail =
     return success;
   };
 
-  const connectTrustWallet = async (): Promise<boolean> => {
-    const trust = (window as any).trustwallet || ((window as any).ethereum?.isTrust ? window.ethereum : null);
-    if (!trust) {
-      toast.error('Trust Wallet no está instalada', {
-        description: 'Instala Trust Wallet o usa la app móvil',
-        action: {
-          label: 'Instalar',
-          onClick: () => window.open('https://trustwallet.com/download', '_blank'),
-        },
-      });
-      return false;
-    }
-    
-    try {
-      await trust.request({ method: 'eth_requestAccounts' });
-      toast.success('Trust Wallet conectada');
-      onClose();
-      return true;
-    } catch (error) {
-      toast.error('Error al conectar Trust Wallet');
-      return false;
-    }
-  };
-
-  const connectMetaMask = async (): Promise<boolean> => {
-    if (!hasMetaMask) {
-      toast.error('MetaMask no está instalado', {
-        description: 'Instala MetaMask para continuar',
-        action: {
-          label: 'Instalar',
-          onClick: () => window.open('https://metamask.io/download/', '_blank'),
-        },
-      });
-      return false;
-    }
-    
-    const success = await connect();
-    if (success) {
-      toast.info("Vinculando Perfil...", {
-        description: "Se está creando tu cuenta automáticamente vinculada a tu wallet."
-      });
-      try {
-        await switchToBSC(false);
-        toast.success('MetaMask conectada a BNB Smart Chain', {
-          description: 'Red configurada para comisiones bajas',
-        });
-      } catch {
-        toast.success('MetaMask conectada', {
-          description: 'Recuerda cambiar a BNB Smart Chain para jugar',
-        });
-      }
-      onClose();
-    }
-    return success;
-  };
-
   const walletOptions: WalletOption[] = [
     {
       id: 'metamask',
       name: 'MetaMask',
       icon: '🦊',
       color: 'from-orange-500 to-orange-600',
-      checkInstalled: () => hasMetaMask,
-      connect: connectMetaMask,
+      checkInstalled: () => isWalletInstalled('metamask'),
+      connect: () => connectWalletByType('metamask'),
     },
     {
       id: 'binance',
       name: 'Binance Wallet',
       icon: '',
       color: 'from-yellow-500 to-yellow-600',
-      checkInstalled: checkBinanceWallet,
-      connect: connectBinanceWallet,
+      checkInstalled: () => isWalletInstalled('binance'),
+      connect: () => connectWalletByType('binance'),
     },
     {
       id: 'trust',
       name: 'Trust Wallet',
       icon: '',
       color: 'from-blue-500 to-blue-600',
-      checkInstalled: checkTrustWallet,
-      connect: connectTrustWallet,
+      checkInstalled: () => isWalletInstalled('trust'),
+      connect: () => connectWalletByType('trust'),
     },
   ];
 
