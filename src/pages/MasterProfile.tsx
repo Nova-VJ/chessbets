@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Swords, Trophy, Loader2, Brain, History as HistoryIcon, ChevronLeft } from 'lucide-react';
+import { BookOpen, Swords, Trophy, Loader2, Brain, History as HistoryIcon, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
-import { coachApiUrl } from '@/lib/coachApi';
-import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend 
+import { supabase } from '@/integrations/supabase/client';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
 
 type MasterData = {
