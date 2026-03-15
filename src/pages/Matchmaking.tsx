@@ -171,7 +171,7 @@ const Matchmaking = () => {
     const { data, error } = await supabase
       .from('matchmaking_queue')
       .insert({
-        user_id: user.id,
+        user_id: effectiveUser.id,
         stake_amount: stakeAmount[0],
         currency,
         time_control: tcSeconds,
@@ -193,7 +193,7 @@ const Matchmaking = () => {
             status: 'searching',
             joined_at: new Date().toISOString(),
           })
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUser.id)
           .eq('status', 'searching')
           .select()
           .single();

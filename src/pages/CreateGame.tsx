@@ -103,7 +103,7 @@ const CreateGame = () => {
       const { data, error } = await (supabase
         .from('lobby_games') as any)
         .insert({
-          creator_user_id: user.id,
+          creator_user_id: effectiveUser.id,
           status: 'waiting',
           time_control_minutes: selectedPreset ? selectedPreset.mins : customMins,
           increment_seconds: selectedPreset ? selectedPreset.inc : customInc,
