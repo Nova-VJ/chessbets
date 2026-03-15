@@ -507,7 +507,8 @@ export default function HistoricalPlay() {
               user_color: userColor,
               turn: newGame.turn(),
               game_id: null,
-              session_token: currentSessionToken
+              session_token: currentSessionToken,
+              user_id: profile?.id
             }).then(chatData => {
               isFetchingCommentaryRef.current = false;
               if (chatData.reply) {
