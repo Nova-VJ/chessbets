@@ -75,28 +75,8 @@ const AICoach = ({ profile }: AICoachProps) => {
   }, [selectedCoachId, session?.access_token]);
 
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      if (!session?.access_token) return;
-      try {
-        const params = new URLSearchParams({ interaction_mode: 'coach_room' });
-        const res = await fetch(`${API_URL}/chat/history/${selectedCoachId}?${params.toString()}`, {
-          headers: { 'Authorization': `Bearer ${session.access_token}` }
-        });
-        if (!res.ok) throw new Error("History fetch failed");
-        const data = await res.json();
-        setChatHistories(prev => ({
-          ...prev,
-          [selectedCoachId]: data.map((msg: any) => ({
-            role: msg.role === 'coach' ? 'coach' : 'user',
-            text: msg.text
-          }))
-        }));
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    void fetchChatHistory();
+    // Chat history is now local-only (edge functions are stateless)
+    // No fetch needed
   }, [selectedCoachId, session?.access_token]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
