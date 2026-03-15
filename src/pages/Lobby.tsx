@@ -112,8 +112,8 @@ const Lobby = () => {
 
   const checkActiveHandshake = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('lobby_games')
+    const { data } = await (supabase
+      .from('lobby_games') as any)
       .select('*')
       .or(`creator_user_id.eq.${user.id},joiner_user_id.eq.${user.id}`)
       .eq('status', 'pending_accept')
