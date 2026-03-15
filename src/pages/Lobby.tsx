@@ -216,8 +216,8 @@ const Lobby = () => {
       }
 
       // 2. Update game status in DB
-      const { error } = await supabase
-        .from('lobby_games')
+      const { error } = await (supabase
+        .from('lobby_games') as any)
         .update({ status: 'cancelled' })
         .eq('id', game.id);
 
