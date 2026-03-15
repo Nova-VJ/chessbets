@@ -461,7 +461,7 @@ export default function HistoricalPlay() {
           if (movesSinceLast >= 10 && !isFetchingCommentaryRef.current) {
             isFetchingCommentaryRef.current = true;
             invokeChessChat({ 
-              message: "Comenta brevemente la posicion actual.", 
+              message: "¿Qué te parece esta posición?", 
               persona: activeCoach.id,
               interaction_mode: 'in_game',
               message_kind: 'auto_commentary',
