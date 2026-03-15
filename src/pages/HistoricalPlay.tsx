@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/hooks/useWallet';
-import { ensureCoachApiAwake, fetchCoachApi } from '@/lib/coachApi';
+import { invokeChessMove, invokeChessChat, invokeChessEvaluate } from '@/lib/coachApi';
 import ConnectModal from '@/components/ConnectModal';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
