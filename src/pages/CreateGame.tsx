@@ -47,9 +47,15 @@ const CreateGame = () => {
       return;
     }
 
-    const minWager = currency === 'USDT' ? 0.01 : 0.00001;
-    if (!wager || isNaN(Number(wager)) || Number(wager) < minWager) {
-      toast.error(`El monto de la apuesta debe ser de al menos ${minWager} ${currency}`);
+    const minWager = paymentMethod === 'web3'
+      ? (currency === 'USDT' ? 1 : 0.00001)
+      : (currency === 'USDT' ? 0.01 : 0.00001);
+    const maxWager = paymentMethod === 'web3'
+      ? (currency === 'USDT' ? 10000 : 100)
+      : 10000;
+
+    if (!wager || isNaN(Number(wager)) || Number(wager) < minWager || Number(wager) > maxWager) {
+      toast.error(`El monto debe estar entre ${minWager} y ${maxWager} ${currency} para ${paymentMethod === 'web3' ? 'Smart Contract' : 'saldo interno'}`);
       return;
     }
 
