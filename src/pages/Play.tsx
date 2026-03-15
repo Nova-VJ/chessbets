@@ -222,8 +222,8 @@ const Play = () => {
   }, [id]);
 
   const fetchMessages = async () => {
-    const { data } = await supabase
-      .from('game_messages')
+    const { data } = await (supabase
+      .from('game_messages') as any)
       .select('*')
       .eq('game_id', id)
       .order('created_at', { ascending: true });
