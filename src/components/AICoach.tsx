@@ -10,7 +10,7 @@ interface AICoachProps {
   profile: any;
 }
 
-const API_URL = coachApiUrl('/api');
+// Edge functions are used directly - no API_URL needed
 const generateCoachRoomSessionToken = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const AICoach = ({ profile }: AICoachProps) => {
