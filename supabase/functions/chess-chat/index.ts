@@ -330,7 +330,7 @@ serve(async (req) => {
       }
     }
 
-    // ── Fetch FULL conversation history + game history (no limits) ──
+    // ── Fetch FULL conversation history + game history + memory profiles (no limits) ──
     let memoryContext = "";
     if (user_id) {
       try {
@@ -354,9 +354,43 @@ serve(async (req) => {
           gameQuery.eq("coach_id", persona);
         }
 
-        const [convResult, gameResult] = await Promise.all([convQuery, gameQuery]);
+        // Fetch structured memory profiles (strengths/weaknesses)
+        const memProfileQuery = supabase
+          .from("coach_memory_profiles")
+          .select("coach_id, strengths_json, weaknesses_json, last_topic, notes, summary_json")
+          .eq("user_id", user_id);
+        if (persona !== "general") {
+          memProfileQuery.eq("coach_id", persona);
+        }
+
+        // Fetch relevant master games for context
+        const masterQuery = supabase
+          .from("master_games")
+          .select("white, black, result, opening, eco, event, date")
+          .eq("coach_id", persona !== "general" ? persona : "fischer")
+          .limit(5);
+
+        const [convResult, gameResult, memProfileResult, masterResult] = await Promise.all([
+          convQuery, gameQuery, memProfileQuery, masterQuery,
+        ]);
 
         const memParts: string[] = [];
+
+        // Memory profiles → structured strengths/weaknesses
+        if (memProfileResult.data && memProfileResult.data.length > 0) {
+          const profileLines = memProfileResult.data.map((mp: any) => {
+            const coachName = COACH_NAMES[mp.coach_id] || mp.coach_id;
+            const strengths = (mp.strengths_json || []).join(", ");
+            const weaknesses = (mp.weaknesses_json || []).join(", ");
+            const parts = [`Coach ${coachName}:`];
+            if (strengths) parts.push(`Fortalezas: ${strengths}`);
+            if (weaknesses) parts.push(`Debilidades: ${weaknesses}`);
+            if (mp.last_topic) parts.push(`Último tema: ${mp.last_topic}`);
+            if (mp.notes) parts.push(`Notas: ${mp.notes.slice(0, 200)}`);
+            return parts.join(" | ");
+          });
+          memParts.push(`[PERFIL DE MEMORIA DEL USUARIO]\n${profileLines.join("\n")}`);
+        }
 
         if (gameResult.data && gameResult.data.length > 0) {
           const gameSummaries = gameResult.data.map((g: any) => {
@@ -375,12 +409,20 @@ serve(async (req) => {
           memParts.push(`[HISTORIAL COMPLETO DE CONVERSACIONES — ${convResult.data.length} mensaje(s)]\n${recentMsgs.join("\n")}`);
         }
 
+        // Master games references
+        if (masterResult.data && masterResult.data.length > 0) {
+          const masterLines = masterResult.data.map((mg: any) =>
+            `- ${mg.white} vs ${mg.black} (${mg.event || "?"}, ${mg.date || "?"}): ${mg.result || "?"}, ${mg.opening || mg.eco || "?"}`
+          );
+          memParts.push(`[PARTIDAS MAESTRAS DE REFERENCIA]\n${masterLines.join("\n")}`);
+        }
+
         if (memParts.length > 0) {
           memoryContext = `\n\n${memParts.join("\n\n")}`;
           if (persona === "general") {
-            memoryContext += "\n\n[NOTA: Tienes acceso al historial COMPLETO del usuario con TODOS los maestros. Sintetiza patrones cruzados, identifica debilidades recurrentes, compara enfoques entre maestros y rastrea la mejora del usuario a lo largo del tiempo.]";
+            memoryContext += "\n\n[NOTA: Tienes acceso al historial COMPLETO del usuario con TODOS los maestros. Sintetiza patrones cruzados, identifica debilidades recurrentes, compara enfoques entre maestros y rastrea la mejora del usuario a lo largo del tiempo. USA el perfil de memoria para personalizar tu respuesta.]";
           } else {
-            memoryContext += "\n\n[NOTA: Recuerdas TODAS las interacciones pasadas con este usuario. Refiérete a ellas naturalmente como si tuvieras memoria real. Conecta la posición actual con errores o logros pasados.]";
+            memoryContext += "\n\n[NOTA: Recuerdas TODAS las interacciones pasadas con este usuario. Refiérete a sus fortalezas y debilidades detectadas. Conecta la posición actual con errores o logros pasados. Usa las partidas maestras como referencia cuando sea relevante.]";
           }
         }
       } catch (e) {

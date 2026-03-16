@@ -10,6 +10,7 @@ import Lobby from "./pages/Lobby";
 import Play from "./pages/Play";
 import Matchmaking from "./pages/Matchmaking";
 import Rankings from "./pages/Rankings";
+import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import Friends from "./pages/Friends";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/friends" element={<Friends />} />
               <Route path="/rules" element={<Rules />} />
               <Route path="/coach" element={<CoachAI />} />
+              <Route path="/insights" element={<Insights />} />
               <Route path="/historical-play" element={<HistoricalPlay />} />
               <Route path="/master-profile/:id" element={<MasterProfile />} />
               <Route path="/admin/test-games" element={<AdminTestGames />} />
