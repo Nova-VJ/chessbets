@@ -379,8 +379,8 @@ serve(async (req) => {
           knowledgeQuery.eq("coach_id", persona);
         }
 
-        const [convResult, gameResult, memProfileResult, masterResult] = await Promise.all([
-          convQuery, gameQuery, memProfileQuery, masterQuery,
+        const [convResult, gameResult, memProfileResult, masterResult, knowledgeResult] = await Promise.all([
+          convQuery, gameQuery, memProfileQuery, masterQuery, knowledgeQuery,
         ]);
 
         const memParts: string[] = [];
