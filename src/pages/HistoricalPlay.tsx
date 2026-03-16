@@ -493,10 +493,18 @@ export default function HistoricalPlay() {
           const currentMoveCount = newGame.history().length;
           const movesSinceLast = currentMoveCount - lastCoachMoveCount;
 
-          if (movesSinceLast >= 8 && !isFetchingCommentaryRef.current) {
+          if (movesSinceLast >= 20 && !isFetchingCommentaryRef.current && Math.random() < 0.6) {
             isFetchingCommentaryRef.current = true;
+            const commentaryAngles = [
+              "Reacciona brevemente a la posición actual desde tu perspectiva personal. NO digas qué jugada hacer.",
+              "Cuenta algo de tu vida que esta posición te recuerde. Puede ser un torneo, una persona, un momento fuera del ajedrez. Sé breve.",
+              "Opina sobre el estilo de juego de tu rival (el usuario) hasta ahora. ¿Te recuerda a alguien? Sé genuino.",
+              "Expresa una emoción real sobre cómo va la partida. Frustración, respeto, aburrimiento, diversión — lo que sientas. 1 frase.",
+              "Haz una observación técnica breve sobre la estructura de peones o la actividad de piezas. Sin decir qué mover.",
+            ];
+            const angle = commentaryAngles[Math.floor(Math.random() * commentaryAngles.length)];
             invokeChessChat({ 
-              message: "Haz un comentario natural sobre la partida en curso, como lo haría un rival humano. NO digas qué jugada debe hacer el usuario. Puedes: recordar una anécdota tuya, opinar sobre la posición, hacer trash talk, contar algo de tu historia personal, o simplemente expresar lo que sientes sobre cómo va la partida.", 
+              message: angle,
               persona: activeCoach.id,
               interaction_mode: 'in_game',
               message_kind: 'auto_commentary',
