@@ -130,7 +130,7 @@ serve(async (req) => {
         .select("id", { count: "exact", head: true })
         .eq("coach_id", master.coachId);
 
-      if ((count || 0) >= 50) {
+      if ((count || 0) >= 200) {
         results[key] = count || 0;
         console.log(`${key} already has ${count} games, skipping.`);
         continue;
