@@ -10,6 +10,7 @@ import Lobby from "./pages/Lobby";
 import Play from "./pages/Play";
 import Matchmaking from "./pages/Matchmaking";
 import Rankings from "./pages/Rankings";
+import Insights from "./pages/Insights";
 import Profile from "./pages/Profile";
 import Auth from "./pages/Auth";
 import Friends from "./pages/Friends";
