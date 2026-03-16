@@ -68,7 +68,11 @@ const AICoach = ({ profile }: AICoachProps) => {
         estimated_title: 'Principiante',
         verdict: 'Usa el chat con los maestros para recibir análisis personalizados de tus partidas.'
       },
-      openings: { favorite: 'N/A', worst: 'N/A', tip: 'Juega más partidas para obtener datos.' },
+      openings: [
+        { name: 'Siciliana', winRate: '0%', color: 'text-zinc-500', bg: 'bg-zinc-700', bar: 'w-0' },
+        { name: 'Italiana', winRate: '0%', color: 'text-zinc-500', bg: 'bg-zinc-700', bar: 'w-0' },
+        { name: 'Francesa', winRate: '0%', color: 'text-zinc-500', bg: 'bg-zinc-700', bar: 'w-0' },
+      ],
       tactics: { solved: 0, accuracy: 0, tip: 'Practica tácticas regularmente.' },
       endgame: { accuracy: 0, tip: 'Los finales son clave para mejorar.' },
       mental: { tilt_risk: 'Bajo', tip: 'Mantén la calma en posiciones complicadas.' }
