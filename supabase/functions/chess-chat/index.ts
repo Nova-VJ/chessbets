@@ -418,12 +418,20 @@ serve(async (req) => {
           memParts.push(`[HISTORIAL COMPLETO DE CONVERSACIONES — ${convResult.data.length} mensaje(s)]\n${recentMsgs.join("\n")}`);
         }
 
-        // Master games references
+        // Master games references (ALL games, no limit)
         if (masterResult.data && masterResult.data.length > 0) {
           const masterLines = masterResult.data.map((mg: any) =>
             `- ${mg.white} vs ${mg.black} (${mg.event || "?"}, ${mg.date || "?"}): ${mg.result || "?"}, ${mg.opening || mg.eco || "?"}`
           );
-          memParts.push(`[PARTIDAS MAESTRAS DE REFERENCIA]\n${masterLines.join("\n")}`);
+          memParts.push(`[PARTIDAS MAESTRAS DE REFERENCIA — ${masterResult.data.length} partida(s)]\n${masterLines.join("\n")}`);
+        }
+
+        // Knowledge units from books (ALL concepts, no limit)
+        if (knowledgeResult.data && knowledgeResult.data.length > 0) {
+          const conceptLines = knowledgeResult.data.map((ku: any) =>
+            `- ${ku.concept_name} (${ku.phase || "general"}): ${ku.explanation || ""} | Triggers: ${ku.triggers || ""} | Anti-patrones: ${ku.anti_patterns || ""}`
+          );
+          memParts.push(`[BASE DE CONOCIMIENTO DEL MAESTRO — ${knowledgeResult.data.length} concepto(s)]\n${conceptLines.join("\n")}`);
         }
 
         if (memParts.length > 0) {
