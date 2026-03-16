@@ -11,3 +11,15 @@ verify_jwt = false
 
 [functions.wiki-profile]
 verify_jwt = false
+
+[functions.coach-history]
+verify_jwt = false
+
+[functions.coach-insights]
+verify_jwt = false
+
+[functions.coach-master-profile]
+verify_jwt = false
+
+[functions.coach-health]
+verify_jwt = false

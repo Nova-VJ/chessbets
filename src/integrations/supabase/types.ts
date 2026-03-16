@@ -117,6 +117,91 @@ export type Database = {
           },
         ]
       }
+      coach_memory_profiles: {
+        Row: {
+          coach_id: string
+          id: string
+          last_topic: string | null
+          notes: string | null
+          strengths_json: Json | null
+          summary_json: Json | null
+          updated_at: string
+          user_id: string
+          weaknesses_json: Json | null
+        }
+        Insert: {
+          coach_id: string
+          id?: string
+          last_topic?: string | null
+          notes?: string | null
+          strengths_json?: Json | null
+          summary_json?: Json | null
+          updated_at?: string
+          user_id: string
+          weaknesses_json?: Json | null
+        }
+        Update: {
+          coach_id?: string
+          id?: string
+          last_topic?: string | null
+          notes?: string | null
+          strengths_json?: Json | null
+          summary_json?: Json | null
+          updated_at?: string
+          user_id?: string
+          weaknesses_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_memory_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_reference_log: {
+        Row: {
+          cited_at: string
+          coach_id: string
+          game_id: string | null
+          id: string
+          session_token: string | null
+          source_key: string | null
+          source_type: string
+          user_id: string
+        }
+        Insert: {
+          cited_at?: string
+          coach_id: string
+          game_id?: string | null
+          id?: string
+          session_token?: string | null
+          source_key?: string | null
+          source_type: string
+          user_id: string
+        }
+        Update: {
+          cited_at?: string
+          coach_id?: string
+          game_id?: string | null
+          id?: string
+          session_token?: string | null
+          source_key?: string | null
+          source_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_reference_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friendships: {
         Row: {
           created_at: string
@@ -261,6 +346,7 @@ export type Database = {
           created_at: string
           creator_id: string
           creator_paid: boolean
+          currency: string | null
           ended_at: string | null
           fen: string | null
           id: string
@@ -268,8 +354,10 @@ export type Database = {
           is_smart_contract: boolean
           last_move_at: string | null
           lobby_id: string | null
+          moves: Json | null
           opponent_id: string | null
           opponent_paid: boolean
+          payment_method: string | null
           pgn: string | null
           result: string | null
           stake_amount: number
@@ -289,6 +377,7 @@ export type Database = {
           created_at?: string
           creator_id: string
           creator_paid?: boolean
+          currency?: string | null
           ended_at?: string | null
           fen?: string | null
           id?: string
@@ -296,8 +385,10 @@ export type Database = {
           is_smart_contract?: boolean
           last_move_at?: string | null
           lobby_id?: string | null
+          moves?: Json | null
           opponent_id?: string | null
           opponent_paid?: boolean
+          payment_method?: string | null
           pgn?: string | null
           result?: string | null
           stake_amount: number
@@ -317,6 +408,7 @@ export type Database = {
           created_at?: string
           creator_id?: string
           creator_paid?: boolean
+          currency?: string | null
           ended_at?: string | null
           fen?: string | null
           id?: string
@@ -324,8 +416,10 @@ export type Database = {
           is_smart_contract?: boolean
           last_move_at?: string | null
           lobby_id?: string | null
+          moves?: Json | null
           opponent_id?: string | null
           opponent_paid?: boolean
+          payment_method?: string | null
           pgn?: string | null
           result?: string | null
           stake_amount?: number
@@ -386,6 +480,80 @@ export type Database = {
             columns: ["winner_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_sources: {
+        Row: {
+          author: string | null
+          created_at: string
+          id: string
+          license_type: string | null
+          title: string
+        }
+        Insert: {
+          author?: string | null
+          created_at?: string
+          id?: string
+          license_type?: string | null
+          title: string
+        }
+        Update: {
+          author?: string | null
+          created_at?: string
+          id?: string
+          license_type?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
+      knowledge_units: {
+        Row: {
+          anti_patterns: string | null
+          coach_id: string | null
+          concept_name: string
+          created_at: string
+          example_fen: string | null
+          explanation: string | null
+          id: string
+          phase: string | null
+          recommended_drill: string | null
+          source_id: string | null
+          triggers: string | null
+        }
+        Insert: {
+          anti_patterns?: string | null
+          coach_id?: string | null
+          concept_name: string
+          created_at?: string
+          example_fen?: string | null
+          explanation?: string | null
+          id?: string
+          phase?: string | null
+          recommended_drill?: string | null
+          source_id?: string | null
+          triggers?: string | null
+        }
+        Update: {
+          anti_patterns?: string | null
+          coach_id?: string | null
+          concept_name?: string
+          created_at?: string
+          example_fen?: string | null
+          explanation?: string | null
+          id?: string
+          phase?: string | null
+          recommended_drill?: string | null
+          source_id?: string | null
+          triggers?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_units_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -471,6 +639,51 @@ export type Database = {
           },
         ]
       }
+      master_games: {
+        Row: {
+          black: string
+          coach_id: string | null
+          created_at: string
+          date: string | null
+          eco: string | null
+          event: string | null
+          fen_list: Json | null
+          id: string
+          opening: string | null
+          pgn: string | null
+          result: string | null
+          white: string
+        }
+        Insert: {
+          black: string
+          coach_id?: string | null
+          created_at?: string
+          date?: string | null
+          eco?: string | null
+          event?: string | null
+          fen_list?: Json | null
+          id?: string
+          opening?: string | null
+          pgn?: string | null
+          result?: string | null
+          white: string
+        }
+        Update: {
+          black?: string
+          coach_id?: string | null
+          created_at?: string
+          date?: string | null
+          eco?: string | null
+          event?: string | null
+          fen_list?: Json | null
+          id?: string
+          opening?: string | null
+          pgn?: string | null
+          result?: string | null
+          white?: string
+        }
+        Relationships: []
+      }
       matchmaking_queue: {
         Row: {
           currency: string
@@ -529,56 +742,89 @@ export type Database = {
         Row: {
           avatar_url: string | null
           balance: number
+          balance_usdt: number
+          country_code: string | null
           created_at: string
           display_name: string | null
+          draws: number
           email: string | null
           games_played: number
           games_won: number
           id: string
+          level: number
+          losses: number
           preferred_wallet: string | null
           rating: number
+          rating_blitz: number
+          rating_bullet: number
+          rating_rapid: number
+          settings: Json | null
           total_deposited: number
           total_withdrawn: number
           total_won: number
           total_won_usdt: number
           updated_at: string
           wallet_address: string | null
+          wins: number
+          xp: number
         }
         Insert: {
           avatar_url?: string | null
           balance?: number
+          balance_usdt?: number
+          country_code?: string | null
           created_at?: string
           display_name?: string | null
+          draws?: number
           email?: string | null
           games_played?: number
           games_won?: number
           id: string
+          level?: number
+          losses?: number
           preferred_wallet?: string | null
           rating?: number
+          rating_blitz?: number
+          rating_bullet?: number
+          rating_rapid?: number
+          settings?: Json | null
           total_deposited?: number
           total_withdrawn?: number
           total_won?: number
           total_won_usdt?: number
           updated_at?: string
           wallet_address?: string | null
+          wins?: number
+          xp?: number
         }
         Update: {
           avatar_url?: string | null
           balance?: number
+          balance_usdt?: number
+          country_code?: string | null
           created_at?: string
           display_name?: string | null
+          draws?: number
           email?: string | null
           games_played?: number
           games_won?: number
           id?: string
+          level?: number
+          losses?: number
           preferred_wallet?: string | null
           rating?: number
+          rating_blitz?: number
+          rating_bullet?: number
+          rating_rapid?: number
+          settings?: Json | null
           total_deposited?: number
           total_withdrawn?: number
           total_won?: number
           total_won_usdt?: number
           updated_at?: string
           wallet_address?: string | null
+          wins?: number
+          xp?: number
         }
         Relationships: []
       }

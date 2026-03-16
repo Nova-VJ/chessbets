@@ -25,13 +25,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Chess } from 'chess.js';
-import { coachApiUrl } from '@/lib/coachApi';
+import { settleGameOnChain } from '@/lib/contract';
 
 import LiveClock from '@/components/LiveClock';
 
 const COMMON_EMOJIS = ['😂', '😎', '😡', '🤔', '😅', '🔥', '💀', '🎯', '🤝', '👋', '👀', '♟️'];
-
-const API_URL = coachApiUrl('/api');
 
 const Play = () => {
   const { id } = useParams();
@@ -41,6 +39,7 @@ const Play = () => {
   const [chess] = useState(new Chess());
   const [isMuted, setIsMuted] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
   const [settings, setSettings] = useState({
     boardTheme: 'classic',
     pieceTheme: 'neo',
@@ -74,8 +73,8 @@ const Play = () => {
       .from('games') as any)
       .select(`
         *,
-        white_player:profiles!games_white_user_id_fkey (display_name, avatar_url, country_code, rating_blitz),
-        black_player:profiles!games_black_user_id_fkey (display_name, avatar_url, country_code, rating_blitz)
+        white_player:profiles!games_white_user_id_fkey (id, display_name, avatar_url, wallet_address, rating, rating_blitz),
+        black_player:profiles!games_black_user_id_fkey (id, display_name, avatar_url, wallet_address, rating, rating_blitz)
       `)
       .eq('id', id)
       .single();
@@ -90,7 +89,7 @@ const Play = () => {
   };
 
   const handleGameUpdate = (newData: any) => {
-    setGameData(prev => ({ ...prev, ...newData }));
+    setGameData((prev: any) => ({ ...prev, ...newData }));
     if (newData.fen) {
       chess.load(newData.fen);
     }
@@ -110,36 +109,110 @@ const Play = () => {
      return Math.max(0, (color === 'white' ? data.white_time_ms : data.black_time_ms) - elapsed);
   };
 
-  const syncGameToCoach = async (status: string, result: string, pgn: string) => {
-    if (!user) return;
+  // ── Settlement logic ──
+  const settleGame = async (
+    game: any, 
+    winnerId: string | null, 
+    resultStr: string
+  ) => {
+    if (isSettling) return;
+    setIsSettling(true);
+
     try {
-      await fetch(`${API_URL}/game/log`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          pgn: pgn,
-          result: result === 'white' ? '1-0' : (result === 'black' ? '0-1' : '1/2-1/2'),
-          opponent_id: 'PvP',
-          time_control: Math.floor((gameData?.initial_time_ms || 600000) / 60000)
-        })
-      });
-      console.log("Game synced to Coach AI memory");
+      const isDraw = resultStr === 'draw';
+      const stakeAmount = Number(game.stake_amount || 0);
+
+      // Web3 settlement
+      if (game.payment_method === 'web3' && game.contract_game_id && stakeAmount > 0) {
+        let winnerWallet: string | null = null;
+        if (!isDraw && winnerId) {
+          const winnerPlayer = game.white_player?.id === winnerId ? game.white_player : game.black_player;
+          winnerWallet = winnerPlayer?.wallet_address || null;
+        }
+
+        toast.loading('Liquidando partida on-chain...', { id: 'settle' });
+        const result = await settleGameOnChain(game.contract_game_id, winnerWallet, isDraw);
+        
+        if (result.status === 'settled') {
+          toast.success('Partida liquidada on-chain', { id: 'settle' });
+        } else if (result.status === 'skipped') {
+          toast.info('Liquidación on-chain pendiente (requiere wallet owner)', { id: 'settle', description: result.reason });
+        } else {
+          toast.error('Error al liquidar on-chain', { id: 'settle', description: result.reason });
+        }
+      }
+
+      // Internal balance settlement
+      if (game.payment_method === 'internal' && stakeAmount > 0) {
+        const totalPot = stakeAmount * 2;
+        const balanceField = game.currency === 'USDT' ? 'balance_usdt' : 'balance';
+        const wonField = game.currency === 'USDT' ? 'total_won_usdt' : 'total_won';
+
+        if (isDraw) {
+          // Refund both players
+          for (const pid of [game.creator_id, game.opponent_id]) {
+            if (!pid) continue;
+            const { data: p } = await supabase.from('profiles').select(balanceField).eq('id', pid).single();
+            if (p) {
+              await (supabase.from('profiles') as any).update({ 
+                [balanceField]: Number((p as any)[balanceField] || 0) + stakeAmount 
+              }).eq('id', pid);
+            }
+          }
+          toast.success('Apuesta devuelta a ambos jugadores');
+        } else if (winnerId) {
+          const { data: wp } = await supabase.from('profiles').select(`${balanceField}, ${wonField}`).eq('id', winnerId).single();
+          if (wp) {
+            await (supabase.from('profiles') as any).update({
+              [balanceField]: Number((wp as any)[balanceField] || 0) + totalPot,
+              [wonField]: Number((wp as any)[wonField] || 0) + totalPot,
+            }).eq('id', winnerId);
+          }
+          toast.success(`Ganancia de ${totalPot} ${game.currency} acreditada`);
+        }
+      }
+
+      // Update stats for both players
+      const players = [
+        { id: game.creator_id, isWinner: winnerId === game.creator_id },
+        { id: game.opponent_id, isWinner: winnerId === game.opponent_id },
+      ];
+
+      for (const p of players) {
+        if (!p.id) continue;
+        const { data: prof } = await (supabase.from('profiles') as any)
+          .select('games_played, wins, losses, draws, rating')
+          .eq('id', p.id)
+          .single();
+        if (prof) {
+          const update: any = { games_played: (prof.games_played || 0) + 1 };
+          if (isDraw) {
+            update.draws = (prof.draws || 0) + 1;
+          } else if (p.isWinner) {
+            update.wins = (prof.wins || 0) + 1;
+            update.games_won = (prof.games_played || 0) + 1; // legacy field
+            update.rating = (prof.rating || 1200) + 15;
+          } else {
+            update.losses = (prof.losses || 0) + 1;
+            update.rating = Math.max(100, (prof.rating || 1200) - 12);
+          }
+          await (supabase.from('profiles') as any).update(update).eq('id', p.id);
+        }
+      }
     } catch (e) {
-      console.error("Failed to sync game to coach:", e);
+      console.error('Settlement error:', e);
+    } finally {
+      setIsSettling(false);
     }
   };
 
   const handleMove = async (move: any) => {
     if (!gameData || gameData.status !== 'in_progress') return;
 
-    const isWhite = user?.id === gameData.white_user_id;
+    const isWhiteTurn = user?.id === gameData.white_user_id;
     const turn = chess.turn();
 
-    if ((turn === 'w' && !isWhite) || (turn === 'b' && isWhite)) {
+    if ((turn === 'w' && !isWhiteTurn) || (turn === 'b' && isWhiteTurn)) {
       toast.error('No es tu turno');
       return;
     }
@@ -151,12 +224,12 @@ const Play = () => {
       if (result) {
         let status = 'in_progress';
         let winner_user_id = null;
-        let result_str = null;
+        let result_str: string | null = null;
 
         if (chess.isCheckmate()) {
           status = 'finished';
-          winner_user_id = isWhite ? gameData.white_user_id : gameData.black_user_id;
-          result_str = isWhite ? 'white' : 'black';
+          winner_user_id = isWhiteTurn ? gameData.white_user_id : gameData.black_user_id;
+          result_str = isWhiteTurn ? 'white' : 'black';
           toast.success('¡JAQUE MATE! Has ganado.');
         } else if (chess.isDraw() || chess.isStalemate() || chess.isThreefoldRepetition()) {
           status = 'finished';
@@ -188,7 +261,7 @@ const Play = () => {
         if (error) throw error;
         
         if (status === 'finished') {
-          syncGameToCoach(status, result_str || 'draw', chess.pgn());
+          await settleGame(gameData, winner_user_id, result_str || 'draw');
         }
       }
     } catch (e) {
@@ -245,21 +318,22 @@ const Play = () => {
     if (settings.confirmResign && !window.confirm('¿Seguro que quieres rendirte?')) return;
     
     const winnerId = isWhite ? gameData.black_user_id : gameData.white_user_id;
+    const result_str = isWhite ? 'black' : 'white';
+
     await supabase.from('games').update({
       status: 'finished',
       winner_user_id: winnerId,
-      result: isWhite ? 'black' : 'white'
+      result: result_str,
+      ended_at: new Date().toISOString(),
     }).eq('id', id);
     
-    syncGameToCoach('finished', isWhite ? 'black' : 'white', chess.pgn());
-    
+    await settleGame(gameData, winnerId, result_str);
     toast.error('Has abandonado la partida');
   };
 
   const handleTimeout = async (colorTimedOut: 'white' | 'black') => {
     if (!gameData || gameData.status === 'finished') return;
     
-    // Only the person who ran out of time broadcasts the update to prevent race conditions from both clients trying to update
     const isMyTimeout = (colorTimedOut === 'white' && isWhite) || (colorTimedOut === 'black' && !isWhite);
     if (!isMyTimeout) return;
 
@@ -271,15 +345,15 @@ const Play = () => {
     await supabase.from('games').update({
       status: 'finished',
       winner_user_id: winnerId,
-      result: result_str
+      result: result_str,
+      ended_at: new Date().toISOString(),
     }).eq('id', id);
     
-    syncGameToCoach('finished', result_str, chess.pgn());
+    await settleGame(gameData, winnerId, result_str);
   };
 
   const handleDrawOffer = async () => {
     toast.info('Oferta de tablas enviada');
-    // Draw offer logic would go here (notifications + pending state)
   };
 
   if (!gameData) return null;
@@ -536,7 +610,7 @@ const Play = () => {
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl overflow-hidden"
+              className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden shadow-2xl"
             >
               <div className="p-8 text-center space-y-6">
                 <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-2 border ${
@@ -569,7 +643,7 @@ const Play = () => {
                    <div className="space-y-1">
                       <div className="text-[10px] text-zinc-500 uppercase font-bold">Nuevo Rating</div>
                       <div className="text-xl font-mono font-bold text-white">
-                        {profile?.rating_blitz || 1200}
+                        {(profile as any)?.rating_blitz || profile?.rating || 1200}
                       </div>
                    </div>
                 </div>
