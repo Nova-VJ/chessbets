@@ -493,10 +493,10 @@ export default function HistoricalPlay() {
           const currentMoveCount = newGame.history().length;
           const movesSinceLast = currentMoveCount - lastCoachMoveCount;
 
-          if (movesSinceLast >= 10 && !isFetchingCommentaryRef.current) {
+          if (movesSinceLast >= 8 && !isFetchingCommentaryRef.current) {
             isFetchingCommentaryRef.current = true;
             invokeChessChat({ 
-              message: "¿Qué te parece esta posición?", 
+              message: "Haz un comentario natural sobre la partida en curso, como lo haría un rival humano. NO digas qué jugada debe hacer el usuario. Puedes: recordar una anécdota tuya, opinar sobre la posición, hacer trash talk, contar algo de tu historia personal, o simplemente expresar lo que sientes sobre cómo va la partida.", 
               persona: activeCoach.id,
               interaction_mode: 'in_game',
               message_kind: 'auto_commentary',
