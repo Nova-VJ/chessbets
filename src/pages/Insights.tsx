@@ -17,7 +17,7 @@ const COACH_LABELS: Record<string, string> = {
 const anim = (delay: number) => ({
   initial: { opacity: 0, y: 16 },
   animate: { opacity: 1, y: 0 },
-  transition: { delay, duration: 0.4, ease: 'easeOut' },
+  transition: { delay, duration: 0.4, ease: 'easeOut' as const },
 });
 
 const StatCard = ({ icon: Icon, value, label, color, delay }: {
