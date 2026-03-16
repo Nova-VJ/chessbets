@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Invoke a chess edge function via Lovable Cloud.
+ * Invoke chess-move edge function.
  */
 export async function invokeChessMove(fen: string, persona: string, timeControl: number) {
   const { data, error } = await supabase.functions.invoke('chess-move', {
@@ -43,6 +43,48 @@ export async function invokeChessEvaluate(params: {
 }) {
   const { data, error } = await supabase.functions.invoke('chess-evaluate', {
     body: params,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function invokeCoachHistory(params: {
+  user_id: string;
+  coach_id?: string;
+  limit?: number;
+}) {
+  const { data, error } = await supabase.functions.invoke('coach-history', {
+    body: params,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function invokeCoachInsights(params: {
+  user_id: string;
+  coach_id?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke('coach-insights', {
+    body: params,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function invokeCoachMasterProfile(params: {
+  coach_id: string;
+  lang?: string;
+}) {
+  const { data, error } = await supabase.functions.invoke('coach-master-profile', {
+    body: params,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function invokeHealthCheck() {
+  const { data, error } = await supabase.functions.invoke('coach-health', {
+    body: {},
   });
   if (error) throw error;
   return data;

@@ -83,6 +83,10 @@ const AcceptanceModal = ({ lobbyGame, onClose, onStart }: AcceptanceModalProps) 
         white_time_ms: timeMsTotal,
         black_time_ms: timeMsTotal,
         started_at: new Date().toISOString(),
+        contract_game_id: lobbyGame.contract_game_id || null,
+        payment_method: lobbyGame.payment_method || 'internal',
+        currency: lobbyGame.currency || 'BNB',
+        moves: [],
       })
       .select()
       .single();
